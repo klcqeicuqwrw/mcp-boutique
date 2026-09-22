@@ -2,9 +2,9 @@
   "servers": {
     "boutique-database": {
       "type": "stdio",
-      "command": "python",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
       "args": [
-        "${workspaceFolder}/server.py"
+        "${workspaceFolder}\\server.py"
       ],
       "env": {
         "SQLITE_DB_PATH": "${workspaceFolder}/boutique.db"

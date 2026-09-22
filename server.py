@@ -7,12 +7,20 @@ from contextlib import closing
 from pathlib import Path
 
 try:
+    # SDK MCP v1.x
     from mcp.server.fastmcp import FastMCP
-except ModuleNotFoundError:
+except ModuleNotFoundError as exc:
+    if exc.name == "mcp":
+        raise ModuleNotFoundError(
+            "Le paquet 'mcp' n'est pas installé dans cet environnement Python. "
+            "Installez-le avec : pip install mcp"
+        ) from exc
+
+    # SDK MCP v2.x : FastMCP a été renommé MCPServer et déplacé
     from mcp.server.mcpserver import MCPServer
 
     class FastMCP(MCPServer):
-        """Compatibility wrapper for the MCP v2 server API."""
+        """Wrapper de compatibilité pour l'API serveur MCP v2."""
 
         def run_stdio(self) -> None:
             asyncio.run(self.run_stdio_async())
@@ -26,7 +34,7 @@ DATABASE_PATH = Path(
 
 
 def _connect_read_only() -> sqlite3.Connection:
-    """Open the configured SQLite database without write access."""
+    """Ouvre la base SQLite configurée en lecture seule."""
     if not DATABASE_PATH.is_file():
         raise FileNotFoundError(
             f"Base SQLite introuvable: {DATABASE_PATH}. "
@@ -42,7 +50,7 @@ def _connect_read_only() -> sqlite3.Connection:
 
 
 def _remove_leading_comments(query: str) -> str:
-    """Remove SQL comments before checking the first statement keyword."""
+    """Retire les commentaires SQL avant de vérifier le mot-clé de la requête."""
     remaining = query.lstrip()
     while remaining.startswith("--") or remaining.startswith("/*"):
         if remaining.startswith("--"):
@@ -68,6 +76,7 @@ def _validate_read_query(query: str) -> str:
     if not re.match(r"^(SELECT|WITH|EXPLAIN)\b", query, re.IGNORECASE):
         raise ValueError("Seules les requêtes SELECT, WITH et EXPLAIN sont autorisées.")
     return query.rstrip(";").strip()
+
 
 @mcp.tool()
 def dire_bonjour(nom: str) -> str:
@@ -132,4 +141,7 @@ def executer_requete_sql(requete: str) -> str:
 
 
 if __name__ == "__main__":
-    mcp.run_stdio()
+    try:
+        mcp.run()
+    except AttributeError:
+        mcp.run_stdio()
