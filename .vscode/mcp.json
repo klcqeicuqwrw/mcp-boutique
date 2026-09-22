@@ -1,0 +1,14 @@
+{
+  "servers": {
+    "boutique-database": {
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}/server.py"
+      ],
+      "env": {
+        "SQLITE_DB_PATH": "${workspaceFolder}/boutique.db"
+      }
+    }
+  }
+}
