@@ -141,7 +141,19 @@ def executer_requete_sql(requete: str) -> str:
 
 
 if __name__ == "__main__":
-    try:
-        mcp.run()
-    except AttributeError:
-        mcp.run_stdio()
+    # MCP_TRANSPORT=stdio (par défaut, pour Claude Desktop en local)
+    # MCP_TRANSPORT=http  (pour une exposition réseau, ex: Copilot Studio)
+    transport = os.environ.get("MCP_TRANSPORT", "stdio")
+
+    if transport == "http":
+        host = os.environ.get("MCP_HOST", "0.0.0.0")
+        port = int(os.environ.get("MCP_PORT", "8000"))
+        try:
+            mcp.run(transport="streamable-http", host=host, port=port)
+        except AttributeError:
+            mcp.run_stdio()
+    else:
+        try:
+            mcp.run()
+        except AttributeError:
+            mcp.run_stdio()
