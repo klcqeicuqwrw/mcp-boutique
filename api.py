@@ -40,7 +40,7 @@ app = FastAPI(title="API Boutique - Langage naturel vers SQL")
 
 
 # ---------------------------------------------------------------------------
-# Accès base de données (repris de server.py)
+# Accès base de données
 # ---------------------------------------------------------------------------
 
 def _connect_read_only() -> sqlite3.Connection:
@@ -139,10 +139,9 @@ def _appeler_gemini_avec_retry(contents: str, config: types.GenerateContentConfi
 
 
 def generer_sql(question: str, schema: str, historique: list) -> str:
-    # Construction du contexte à partir des 6 derniers messages (3 derniers échanges)
     contexte_str = ""
     if historique:
-        messages_recents = historique[-6:]
+        messages_recents = historique[-6:] # Garder les 3 derniers échanges max
         lignes = [f"{msg.role.capitalize()}: {msg.content}" for msg in messages_recents]
         contexte_str = "Historique de la conversation (pour contexte) :\n" + "\n".join(lignes) + "\n\n"
 
@@ -188,7 +187,7 @@ def formuler_reponse(question: str, resultats: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
-# API
+# API Modèles & Routes
 # ---------------------------------------------------------------------------
 
 class MessageHistorique(BaseModel):
@@ -290,8 +289,9 @@ PAGE_HTML = """
     gap: 8px;
   }
   #sidebar-header .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  
   #new-chat {
-    margin: 12px;
+    margin: 12px 12px 6px 12px;
     padding: 10px 12px;
     background: rgba(255,255,255,0.06);
     border: 1px solid rgba(255,255,255,0.1);
@@ -302,20 +302,43 @@ PAGE_HTML = """
     text-align: left;
   }
   #new-chat:hover { background: rgba(255,255,255,0.1); }
+  
+  #clear-all {
+    margin: 0 12px 12px 12px;
+    padding: 8px;
+    background: rgba(255, 60, 60, 0.15);
+    border: 1px solid rgba(255, 60, 60, 0.3);
+    border-radius: 8px;
+    color: #ff8a8a;
+    cursor: pointer;
+    font-size: 13px;
+    text-align: center;
+  }
+  #clear-all:hover { background: rgba(255, 60, 60, 0.25); }
+
   #history { flex: 1; overflow-y: auto; padding: 4px 8px; }
+  
   .history-item {
     padding: 10px 12px;
     border-radius: 8px;
     font-size: 13px;
     color: var(--sidebar-text);
     cursor: pointer;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     margin-bottom: 2px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   }
   .history-item:hover { background: rgba(255,255,255,0.08); }
   .history-item.active { background: rgba(99,102,241,0.25); color: #fff; }
+  
+  .history-actions { display: none; gap: 6px; flex-shrink: 0; }
+  .history-item:hover .history-actions { display: flex; }
+  .history-actions button {
+    background: none; border: none; cursor: pointer;
+    font-size: 13px; padding: 0; color: var(--sidebar-text); opacity: 0.6;
+  }
+  .history-actions button:hover { opacity: 1; }
 
   /* Main */
   #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -383,6 +406,7 @@ PAGE_HTML = """
 <div id="sidebar">
   <div id="sidebar-header"><span class="dot"></span> Assistant Boutique</div>
   <button id="new-chat">+ Nouvelle conversation</button>
+  <button id="clear-all">🗑️ Tout effacer</button>
   <div id="history"></div>
 </div>
 
@@ -407,6 +431,7 @@ const form = document.getElementById('form');
 const input = document.getElementById('question');
 const historyEl = document.getElementById('history');
 const newChatBtn = document.getElementById('new-chat');
+const clearAllBtn = document.getElementById('clear-all');
 const checkReponse = document.getElementById('check-reponse');
 const checkTableau = document.getElementById('check-tableau');
 
@@ -452,15 +477,65 @@ function ouvrirConversation(id) {
   renderThread();
 }
 
+function renommerConversation(id) {
+  const conv = conversations.find(c => c.id === id);
+  if (!conv) return;
+  const nouveauTitre = prompt("Nouveau nom pour la conversation :", conv.titre || "");
+  if (nouveauTitre !== null && nouveauTitre.trim() !== "") {
+    conv.titre = nouveauTitre.trim();
+    sauvegarderConversations();
+    renderHistory();
+  }
+}
+
+function supprimerConversation(id) {
+  if (!confirm("Voulez-vous vraiment supprimer cette conversation ?")) return;
+  conversations = conversations.filter(c => c.id !== id);
+  
+  if (conversationActiveId === id) {
+    conversationActiveId = conversations.length > 0 ? conversations[0].id : null;
+    renderThread();
+  }
+  sauvegarderConversations();
+  renderHistory();
+}
+
 function renderHistory() {
   historyEl.innerHTML = '';
   conversations.forEach((conv) => {
     const item = document.createElement('div');
     item.className = 'history-item' + (conv.id === conversationActiveId ? ' active' : '');
+    
+    // Titre cliquable
+    const titreSpan = document.createElement('span');
     const titre = conv.titre || (conv.messages[0] ? conv.messages[0].question : 'Nouvelle conversation');
-    item.textContent = titre;
-    item.title = titre;
-    item.addEventListener('click', () => ouvrirConversation(conv.id));
+    titreSpan.textContent = titre;
+    titreSpan.title = titre;
+    titreSpan.style.flex = "1";
+    titreSpan.style.overflow = "hidden";
+    titreSpan.style.textOverflow = "ellipsis";
+    titreSpan.style.whiteSpace = "nowrap";
+    titreSpan.addEventListener('click', () => ouvrirConversation(conv.id));
+
+    // Boutons d'action (masqués par défaut, visibles au survol)
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'history-actions';
+
+    const btnRename = document.createElement('button');
+    btnRename.textContent = '✏️';
+    btnRename.title = 'Renommer';
+    btnRename.onclick = (e) => { e.stopPropagation(); renommerConversation(conv.id); };
+
+    const btnDelete = document.createElement('button');
+    btnDelete.textContent = '❌';
+    btnDelete.title = 'Supprimer';
+    btnDelete.onclick = (e) => { e.stopPropagation(); supprimerConversation(conv.id); };
+
+    actionsDiv.appendChild(btnRename);
+    actionsDiv.appendChild(btnDelete);
+
+    item.appendChild(titreSpan);
+    item.appendChild(actionsDiv);
     historyEl.appendChild(item);
   });
 }
@@ -504,7 +579,7 @@ function addAssistantBubble(msg, isError = false, scroll = true) {
   div.className = 'msg assistant';
 
   let tableHtml = '';
-  // On affiche le tableau seulement si l'utilisateur l'a demandé (ou s'il n'y a pas d'info, par compatibilité)
+  // Affiche le tableau si l'utilisateur l'a demandé et qu'il y a des lignes
   if (msg.veut_tableau !== false && msg.resultats && msg.resultats.rows && msg.resultats.rows.length > 0) {
     const cols = msg.resultats.columns;
     tableHtml = '<table><thead><tr>' + cols.map(c => `<th>${escapeHtml(c)}</th>`).join('') + '</tr></thead><tbody>';
@@ -526,7 +601,7 @@ function addAssistantBubble(msg, isError = false, scroll = true) {
   }
 
   if (!msg.reponse && !tableHtml && !isError) {
-      htmlContent = `<div class="bubble"><em>Requête exécutée (réponse et tableau masqués).</em></div>` + htmlContent;
+      htmlContent = `<div class="bubble"><em>Requête exécutée avec succès (réponse et tableau masqués ou vides).</em></div>` + htmlContent;
   }
 
   div.innerHTML = htmlContent;
@@ -558,6 +633,15 @@ function escapeHtml(str) {
 
 newChatBtn.addEventListener('click', nouvelleConversation);
 
+clearAllBtn.addEventListener('click', () => {
+  if (!confirm("Attention, cela va effacer TOUTES les conversations définitivement. Confirmer ?")) return;
+  conversations = [];
+  conversationActiveId = null;
+  sauvegarderConversations();
+  renderHistory();
+  renderThread();
+});
+
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const question = input.value.trim();
@@ -578,10 +662,10 @@ form.addEventListener('submit', async (e) => {
   form.querySelector('button').disabled = true;
   addTyping();
 
-  // Construction de l'historique pour l'API
+  // Construction de l'historique (pour donner du contexte à l'IA)
   const historiqueAEnvoyer = conv.messages.flatMap(m => [
       { role: "user", content: m.question },
-      { role: "assistant", content: m.reponse || "(Tableau généré sans texte)" }
+      { role: "assistant", content: m.reponse || "(Tableau de données généré)" }
   ]);
 
   let entree = { question, veut_tableau: veutTableau };
@@ -639,3 +723,7 @@ renderThread();
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
     return PAGE_HTML
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
