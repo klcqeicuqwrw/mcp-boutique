@@ -1,1 +1,6 @@
 mcp>=2.0
+fastapi
+uvicorn
+pydantic
+google-genai
+python-dotenv

@@ -74,7 +74,7 @@ def _validate_read_query(query: str) -> str:
     if ";" in query.rstrip(";"):
         raise ValueError("Une seule requête SQL est autorisée.")
     if not re.match(r"^(SELECT|WITH|EXPLAIN)\b", query, re.IGNORECASE):
-        raise ValueError("Seules les requêtes SELECT, WITH et EXPLAIN sont autorisées.")
+        raise ValueError("Vous n'êtes pas autorisé à exécuter cette requête.")
     return query.rstrip(";").strip()
 
 
