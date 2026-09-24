@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Assistant Boutique</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
 :root{--acc:#4f46e5;--bd:#e5e5e8;--mut:#7a7a85;--side:#1e1e2e}
 *{box-sizing:border-box}body{margin:0;font:15px -apple-system,"Segoe UI",Roboto,sans-serif;color:#1f1f28;background:#f7f7f8;display:flex;height:100vh;overflow:hidden}
@@ -13,7 +14,7 @@ input,select{padding:10px 12px;border:1px solid var(--bd);border-radius:8px;font
 #side{width:260px;background:var(--side);color:#d8d8e0;display:flex;flex-direction:column;flex-shrink:0}
 #side h1{font-size:15px;margin:0;padding:18px 16px;border-bottom:1px solid #ffffff14}
 #side button.n{margin:12px;padding:10px;background:#ffffff10;border:1px solid #ffffff1a;border-radius:8px;color:inherit;text-align:left}
-#hist{flex:1;overflow:auto;padding:0 8px}
+#s{margin:0 12px 8px;background:#ffffff10;border-color:#ffffff1a;color:#fff;font-size:13px}#hist{flex:1;overflow:auto;padding:0 8px}
 .h{padding:9px 12px;border-radius:8px;font-size:13px;display:flex;gap:6px;cursor:pointer}
 .h:hover{background:#ffffff14}.h.a{background:#6366f140;color:#fff}.h span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .h b{font-weight:400;opacity:.6}.h b:hover{opacity:1}
@@ -35,11 +36,12 @@ th,td{border:1px solid var(--bd);padding:6px 10px;text-align:left}th{background:
 </style></head><body>
 
 <div id="side"><h1>Assistant Boutique</h1>
-<button class="n" id="new">+ Nouvelle conversation</button><div id="hist"></div>
+<button class="n" id="new">+ Nouvelle conversation</button>
+<input id="s" placeholder="Rechercher une conversation ou une question…" autocomplete="off"><div id="hist"></div>
 <div id="who"><span id="me"></span><a id="adm" href="/admin" hidden>Administration</a>
 <button id="pw">Changer mon mot de passe</button><button id="out">Se déconnecter</button></div></div>
 <div id="main"><div id="thread"></div>
-<div id="bar"><div id="opt"><label><input type="checkbox" id="cr" checked> Réponse texte</label></div>
+<div id="bar"><div id="opt"><label><input type="checkbox" id="cr" checked> Réponse texte</label> &nbsp; <label><input type="checkbox" id="ct" checked> Tableau</label></div>
 <form id="f"><input id="q" placeholder="Ex : Quels sont mes clients VIP ?" autocomplete="off" required>
 <button class="btn">Envoyer</button></form></div></div>
 <script>
@@ -60,15 +62,21 @@ $('out').onclick=async()=>{await api('/api/logout','POST');location.href='/'};
 $('pw').onclick=async()=>{const a=prompt('Mot de passe actuel :');if(!a)return;const n=prompt('Nouveau (10 caractères min.) :');if(!n)return;
   try{await api('/api/password','POST',{ancien:a,nouveau:n});alert('Mot de passe modifié')}catch(x){alert(x.message)}};
 const conv=()=>convs.find(c=>c.id===cur);
-function hist(){$('hist').innerHTML='';convs.forEach(c=>{
-  const d=document.createElement('div');d.className='h'+(c.id===cur?' a':'');
-  d.innerHTML=`<span>${esc(c.titre||'Nouvelle conversation')}</span><b title="Renommer">✏️</b><b title="Supprimer">❌</b>`;
+function hist(){$('hist').innerHTML='';const t=$('s').value.trim().toLowerCase();let n=0;convs.forEach(c=>{
+  let snip='';
+  if(t){const has=x=>(x||'').toLowerCase().includes(t);const hit=c.messages.find(m=>has(m.question)||has(m.reponse));
+    if(!hit&&!has(c.titre))return;
+    if(hit)snip=`<small style="display:block;opacity:.6;overflow:hidden;text-overflow:ellipsis">${esc(hit.question)}</small>`}
+  n++;const d=document.createElement('div');d.className='h'+(c.id===cur?' a':'');
+  d.innerHTML=`<span>${esc(c.titre||'Nouvelle conversation')}${snip}</span><b title="Renommer">✏️</b><b title="Supprimer">❌</b>`;
   d.querySelector('span').onclick=()=>{cur=c.id;hist();thread()};
   const [rn,del]=d.querySelectorAll('b');
   rn.onclick=async()=>{const t=prompt('Nouveau nom :',c.titre||'');if(t&&t.trim()){await api('/api/conversations/'+c.id,'PATCH',{titre:t});c.titre=t.trim();hist()}};
   del.onclick=async()=>{if(!confirm('Supprimer cette conversation ?'))return;await api('/api/conversations/'+c.id,'DELETE');
     convs=convs.filter(x=>x.id!==c.id);if(cur===c.id)cur=convs[0]?.id||null;hist();thread()};
-  $('hist').appendChild(d)})}
+  $('hist').appendChild(d)});if(t&&!n)$('hist').innerHTML='<div class="h" style="cursor:default">Aucun résultat</div>'}
+$('s').oninput=hist;
+$('cr').onchange=$('ct').onchange=e=>{if(!$('cr').checked&&!$('ct').checked)(e.target===$('cr')?$('ct'):$('cr')).checked=true};
 function thread(){const t=$('thread');t.innerHTML='';const c=conv();
   if(!c||!c.messages.length){t.innerHTML='<div class="empty">Posez une question sur vos données.</div>';return}
   c.messages.forEach(m=>{bubble('u',esc(m.question));assistant(m)});t.scrollTop=t.scrollHeight}
@@ -79,22 +87,30 @@ function assistant(m){
   const d=document.createElement('div');d.className='m a';let h='';
   if(m.reponse)h+=`<div class="bub">${esc(m.reponse)}</div>`;
   const r=m.resultats;
-  if(r&&r.rows.length){h+='<div class="tw"><table><thead><tr>'+r.columns.map(c=>`<th>${esc(c)}</th>`).join('')+'</tr></thead><tbody>'+
+  if(r&&r.rows.length){if(!r.masque)h+='<div class="tw"><table><thead><tr>'+r.columns.map(c=>`<th>${esc(c)}</th>`).join('')+'</tr></thead><tbody>'+
     r.rows.map(x=>'<tr>'+r.columns.map(c=>`<td>${esc(String(x[c]??''))}</td>`).join('')+'</tr>').join('')+'</tbody></table></div>';
     if(r.truncated)h+='<div class="exp">Résultat limité à '+r.row_count+' lignes.</div>';
     h+=`<div class="exp">Exporter :<select>${['csv','xlsx','json','tsv','md'].map(f=>`<option>${f}</option>`).join('')}</select><button>Télécharger</button></div>`}
+  if(r&&r.graphique)h+='<div style="width:min(720px,100%);background:#fff;border:1px solid var(--bd);border-radius:8px;padding:12px"><canvas></canvas></div>';
   if(m.sql_genere)h+=`<div class="sql">${esc(m.sql_genere)}</div>`;
   d.innerHTML=h||'<div class="bub"><em>Aucun résultat.</em></div>';
   const b=d.querySelector('.exp button');
   if(b)b.onclick=()=>{location.href=`/api/export/${m.id}?format=${d.querySelector('.exp select').value}`};
-  $('thread').appendChild(d)}
+  $('thread').appendChild(d);if(r&&r.graphique)chart(d.querySelector('canvas'),r)}
+const PAL=['#4f46e5','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#14b8a6','#ec4899'];
+function chart(cv,r){const g=r.graphique;
+  if(typeof Chart==='undefined'){cv.parentElement.textContent='Graphique indisponible (bibliothèque Chart.js non chargée).';return}
+  const rows=r.rows.slice(0,100),pie=g.type==='pie'||g.type==='doughnut';
+  new Chart(cv,{type:g.type,data:{labels:rows.map(x=>String(x[g.x]??'')),datasets:g.y.map((c,i)=>({label:c,data:rows.map(x=>Number(x[c])),
+    backgroundColor:pie?PAL:PAL[i%8],borderColor:pie?'#fff':PAL[i%8],tension:.25}))},
+    options:{plugins:{title:{display:!!g.titre,text:g.titre},legend:{display:pie||g.y.length>1}}}})}
 $('new').onclick=async()=>{const c=await api('/api/conversations','POST');convs.unshift(c);cur=c.id;hist();thread();$('q').focus()};
 $('f').onsubmit=async e=>{e.preventDefault();const q=$('q').value.trim();if(!q)return;
   if(!conv()){const c=await api('/api/conversations','POST');convs.unshift(c);cur=c.id}
   const c=conv();if(!c.messages.length)$('thread').innerHTML='';
   bubble('u',esc(q));$('q').value='';$('q').disabled=true;const w=bubble('a','<i>Recherche en cours…</i>');
   const m={question:q};
-  try{const r=await api('/api/ask','POST',{conv_id:c.id,question:q,veut_reponse:$('cr').checked});
+  try{const r=await api('/api/ask','POST',{conv_id:c.id,question:q,veut_reponse:$('cr').checked,veut_tableau:$('ct').checked});
     Object.assign(m,{id:r.id,reponse:r.reponse,sql_genere:r.sql_genere,resultats:r.resultats})}
   catch(x){m.erreur=x.message}
   w.remove();assistant(m);c.messages.push(m);if(!c.titre)c.titre=q.slice(0,80);hist();

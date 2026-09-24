@@ -1,6 +1,6 @@
 """Point d'entrée sécurisé : uvicorn main:app --port 8000
 Réutilise la génération SQL / réponse Gemini de api.py."""
-import csv, io, json, os, time, uuid
+import csv, io, json, os, re, time, uuid
 from pathlib import Path
 from typing import List, Optional
 
@@ -9,7 +9,46 @@ from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 
 import securite as S
-from api import MessageHistorique, formuler_reponse, generer_sql
+from google.genai import types
+from api import MessageHistorique, _appeler_gemini_avec_retry, formuler_reponse, generer_sql
+
+MOTS_GRAPH = re.compile(r"graph|courbe|histogramme|camembert|diagramme|chart|plot", re.I)
+TYPES_GRAPH = ("bar", "line", "pie", "doughnut")
+
+
+def choisir_graphique(question, res):
+    """Choisit type de graphique et colonnes ; repli heuristique si l'IA échoue."""
+    cols, rows = res["columns"], res["rows"]
+    est_num = lambda c: any(isinstance(r.get(c), (int, float)) for r in rows) and \
+        all(r.get(c) is None or isinstance(r.get(c), (int, float)) for r in rows)
+    nums = [c for c in cols if est_num(c)]
+    if len(cols) < 2 or not rows or not nums:
+        return None
+    spec = None
+    try:
+        r = _appeler_gemini_avec_retry(
+            f"Question : {question}\nColonnes : {cols} (numériques : {nums})\n"
+            f"Début des lignes : {json.dumps(rows[:3], ensure_ascii=False, default=str)}\n"
+            f"Nombre de lignes : {len(rows)}\n"
+            'Choisis le graphique le plus parlant. Réponds en JSON : {"type":"bar|line|pie|doughnut",'
+            '"x":"colonne","y":["colonnes numériques"],"titre":"titre court"}. '
+            "line = évolution dans le temps ; pie/doughnut = parts d'un tout (8 lignes max, un seul y) ; sinon bar.",
+            types.GenerateContentConfig(temperature=0, response_mime_type="application/json"))
+        spec = json.loads(r.text)
+    except Exception:
+        spec = None
+    ok = isinstance(spec, dict) and spec.get("type") in TYPES_GRAPH and spec.get("x") in cols \
+        and isinstance(spec.get("y"), list) and spec["y"] and all(y in nums for y in spec["y"])
+    if not ok:
+        x = next((c for c in cols if c not in nums), cols[0])
+        y = [c for c in nums if c != x][:1]
+        if not y:
+            return None
+        spec = {"type": "bar", "x": x, "y": y, "titre": question[:60]}
+    if spec["type"] in ("pie", "doughnut"):
+        spec["y"] = spec["y"][:1]
+    spec["titre"] = str(spec.get("titre") or "")[:100]
+    return spec
 
 WEB = Path(__file__).parent / "web"
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"  # mettre 1 derrière HTTPS
@@ -172,6 +211,7 @@ class Question(BaseModel):
     conv_id: str
     question: str
     veut_reponse: bool = True
+    veut_tableau: bool = True
 
 
 @app.post("/api/ask")
@@ -223,6 +263,14 @@ def ask(p: Question, u=Depends(user_dep)):
             rep = formuler_reponse(question, res)
         except Exception as e:
             raise HTTPException(502, f"Erreur Gemini (formulation): {e}")
+    if not (p.veut_tableau or p.veut_reponse):
+        p.veut_tableau = True                      # toujours afficher au moins un des deux
+    if not p.veut_tableau:
+        res["masque"] = True                       # tableau conservé (export) mais non affiché
+    if MOTS_GRAPH.search(question):
+        g = choisir_graphique(question, res)
+        if g:
+            res["graphique"] = g
     mid = enregistrer(reponse=rep, sql=sql, resultats=res)
     return {"id": mid, "reponse": rep, "sql_genere": sql, "resultats": res}
 

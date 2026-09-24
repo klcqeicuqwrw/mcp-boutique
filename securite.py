@@ -45,6 +45,9 @@ def init_db():
         CREATE TABLE IF NOT EXISTS query_log(id INTEGER PRIMARY KEY, user_id INTEGER, username TEXT,
             question TEXT, sql TEXT, status TEXT, row_count INTEGER, duration_ms INTEGER, created_at REAL);
         """)
+        c.executemany("INSERT OR IGNORE INTO services(name) VALUES(?)",
+                      [("Marketing",), ("Finance",), ("RH",), ("DSI",)])
+        c.commit()
     if not q("SELECT 1 FROM users WHERE role='admin'", one=True):
         pwd = os.environ.get("ADMIN_PASSWORD") or secrets.token_urlsafe(12)
         creer_utilisateur(os.environ.get("ADMIN_USERNAME", "admin"), pwd, "admin")
