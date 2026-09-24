@@ -7,4 +7,10 @@ Liste des tables :
     - employes
     - commandes
     - lignes_commande
+
+Texte terminal = 
+    git add .
+    git commit -m "Votre message de commit"
+    git push
+
     
