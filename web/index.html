@@ -90,15 +90,34 @@ function assistant(m){
   if(r&&r.rows.length){if(!r.masque)h+='<div class="tw"><table><thead><tr>'+r.columns.map(c=>`<th>${esc(c)}</th>`).join('')+'</tr></thead><tbody>'+
     r.rows.map(x=>'<tr>'+r.columns.map(c=>`<td>${esc(String(x[c]??''))}</td>`).join('')+'</tr>').join('')+'</tbody></table></div>';
     if(r.truncated)h+='<div class="exp">Résultat limité à '+r.row_count+' lignes.</div>';
-    h+=`<div class="exp">Exporter :<select>${['csv','xlsx','json','tsv','md'].map(f=>`<option>${f}</option>`).join('')}</select><button>Télécharger</button></div>`}
+    h+=`<div class="exp">Exporter :<select>${['csv','xlsx','pdf','json','tsv','md'].map(f=>`<option>${f}</option>`).join('')}</select><button>Télécharger</button></div>`}
+  if(r&&r.rows.length)h+=builder(r);
   if(r&&r.graphique)h+='<div style="width:min(720px,100%);background:#fff;border:1px solid var(--bd);border-radius:8px;padding:12px"><canvas></canvas></div>';
   if(m.sql_genere)h+=`<div class="sql">${esc(m.sql_genere)}</div>`;
   d.innerHTML=h||'<div class="bub"><em>Aucun résultat.</em></div>';
   const b=d.querySelector('.exp button');
   if(b)b.onclick=()=>{location.href=`/api/export/${m.id}?format=${d.querySelector('.exp select').value}`};
-  $('thread').appendChild(d);if(r&&r.graphique)chart(d.querySelector('canvas'),r)}
+  $('thread').appendChild(d);if(r&&r.graphique)chart(d.querySelector('canvas'),r);if(r&&r.rows.length)wire(d,r)}
+// --- Graphique construit par l'utilisateur à partir du tableau ---
+const numCols=r=>r.columns.filter(c=>r.rows.some(x=>typeof x[c]==='number')&&r.rows.every(x=>x[c]==null||typeof x[c]==='number'));
+function builder(r){const num=numCols(r);if(r.columns.length<2||!num.length)return '';
+  const x0=r.columns.find(c=>!num.includes(c))||r.columns[0],y0=num.find(c=>c!==x0)||num[0];
+  return `<div class="exp gb" style="flex-wrap:wrap">Graphique :
+  <select data-k="type"><option value="bar">Barres</option><option value="line">Courbe</option><option value="pie">Camembert</option><option value="doughnut">Anneau</option></select>
+  X <select data-k="x">${r.columns.map(c=>`<option${c===x0?' selected':''}>${esc(c)}</option>`).join('')}</select>
+  Y ${num.map((c,i)=>`<label><input type="checkbox" data-y="${i}"${c===y0?' checked':''}> ${esc(c)}</label>`).join(' ')}
+  <button data-k="go">Créer le graphique</button></div><div class="gout"></div>`}
+function wire(d,r){const gb=d.querySelector('.gb');if(!gb)return;
+  gb.querySelector('[data-k=go]').onclick=()=>{
+    const num=numCols(r),ys=[...gb.querySelectorAll('[data-y]')].filter(c=>c.checked).map(c=>num[+c.dataset.y]);
+    if(!ys.length){alert('Cochez au moins une colonne Y.');return}
+    const type=gb.querySelector('[data-k=type]').value,x=gb.querySelector('[data-k=x]').value,pie=type==='pie'||type==='doughnut';
+    const out=d.querySelector('.gout'),old=out.querySelector('canvas');
+    if(old&&typeof Chart!=='undefined')Chart.getChart(old)?.destroy();
+    out.innerHTML='<div style="width:min(720px,100%);background:#fff;border:1px solid var(--bd);border-radius:8px;padding:12px"><canvas></canvas></div>';
+    chart(out.querySelector('canvas'),r,{type,x,y:pie?ys.slice(0,1):ys,titre:(pie?ys[0]:ys.join(', '))+' par '+x})}}
 const PAL=['#4f46e5','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#14b8a6','#ec4899'];
-function chart(cv,r){const g=r.graphique;
+function chart(cv,r,g){g=g||r.graphique;
   if(typeof Chart==='undefined'){cv.parentElement.textContent='Graphique indisponible (bibliothèque Chart.js non chargée).';return}
   const rows=r.rows.slice(0,100),pie=g.type==='pie'||g.type==='doughnut';
   new Chart(cv,{type:g.type,data:{labels:rows.map(x=>String(x[g.x]??'')),datasets:g.y.map((c,i)=>({label:c,data:rows.map(x=>Number(x[c])),
