@@ -4,8 +4,9 @@ import csv, io, json, os, re, time, uuid
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import securite as S
@@ -54,6 +55,7 @@ WEB = Path(__file__).parent / "web"
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"  # mettre 1 derrière HTTPS
 app = FastAPI(title="Assistant Boutique (sécurisé)")
 S.init_db()
+app.mount("/static", StaticFiles(directory=WEB / "static"), name="static")
 
 
 # --- Dépendances ----------------------------------------------------------------
@@ -92,6 +94,11 @@ def accueil(request: Request):
     if not u:
         return FileResponse(WEB / "login.html")
     return RedirectResponse("/admin" if u["role"] == "admin" else "/chat")
+
+
+@app.get("/reinit")
+def page_reinit():
+    return FileResponse(WEB / "reset.html")
 
 
 @app.get("/chat")
@@ -143,6 +150,45 @@ def logout(request: Request, response: Response):
 def me(u=Depends(user_dep)):
     svc = S.q("SELECT name FROM services WHERE id=?", (u["service_id"],), one=True)
     return {"username": u["username"], "role": u["role"], "service": svc["name"] if svc else None}
+
+
+class Oubli(BaseModel):
+    email: str
+
+
+class Reinit(BaseModel):
+    token: str
+    nouveau: str
+
+
+_oublis: dict = {}
+
+
+@app.post("/api/mdp-oublie")
+def mdp_oublie(p: Oubli, bg: BackgroundTasks):
+    """Réponse identique que l'e-mail existe ou non (pas d'énumération de comptes).
+    Limite : 3 demandes par heure et par adresse."""
+    now, cle = time.time(), p.email.strip().lower()
+    recents = [t for t in _oublis.get(cle, []) if now - t < 3600]
+    if cle and len(recents) < 3:
+        _oublis[cle] = recents + [now]
+        r = S.creer_reset(cle)
+        if r:
+            u, token = r
+            bg.add_task(S.envoyer_mail, u["email"], "Réinitialisation de votre mot de passe",
+                        f"Bonjour {u['username']},\n\nPour choisir un nouveau mot de passe (lien valable 30 minutes) :\n"
+                        f"{S.BASE_URL}/reinit?token={token}\n\n"
+                        "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.")
+    return {"ok": True}
+
+
+@app.post("/api/reinit")
+def reinit(p: Reinit):
+    try:
+        S.appliquer_reset(p.token, p.nouveau)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True}
 
 
 class Mdp(BaseModel):
@@ -305,6 +351,28 @@ def exporter(mid: int, format: str = "csv", u=Depends(user_dep)):
         lignes = ["| " + " | ".join(map(esc, cols)) + " |", "|" + "---|" * len(cols)]
         lignes += ["| " + " | ".join(esc(v) for v in x) + " |" for x in rows]
         data, mime = "\n".join(lignes).encode(), "text/markdown; charset=utf-8"
+    elif format == "pdf":
+        try:
+            from reportlab.lib import colors
+            from reportlab.lib.pagesizes import A4, landscape
+            from reportlab.lib.styles import getSampleStyleSheet
+            from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+        except ModuleNotFoundError:
+            raise HTTPException(501, "Installez reportlab : pip install reportlab")
+        from xml.sax.saxutils import escape
+        styles = getSampleStyleSheet()
+        st = styles["BodyText"]; st.fontSize, st.leading = 7, 9
+        cell = lambda v: Paragraph(escape(str(v)), st)
+        largeur = (landscape(A4)[0] - 48) / max(len(cols), 1)
+        t = Table([[cell(c) for c in cols]] + [[cell(v) for v in x] for x in rows],
+                  colWidths=[largeur] * max(len(cols), 1), repeatRows=1)
+        t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e5e7eb")),
+                               ("GRID", (0, 0), (-1, -1), 0.25, colors.grey), ("VALIGN", (0, 0), (-1, -1), "TOP")]))
+        buf = io.BytesIO()
+        SimpleDocTemplate(buf, pagesize=landscape(A4), leftMargin=24, rightMargin=24,
+                          topMargin=24, bottomMargin=24).build(
+            [Paragraph("Export des résultats", styles["Heading3"]), Spacer(1, 6), t])
+        data, mime = buf.getvalue(), "application/pdf"
     elif format == "xlsx":
         try:
             from openpyxl import Workbook
@@ -317,7 +385,7 @@ def exporter(mid: int, format: str = "csv", u=Depends(user_dep)):
         buf = io.BytesIO(); wb.save(buf)
         data, mime = buf.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     else:
-        raise HTTPException(400, "Format inconnu (csv, tsv, json, md, xlsx)")
+        raise HTTPException(400, "Format inconnu (csv, tsv, json, md, xlsx, pdf)")
     ext = "md" if format == "md" else format
     return Response(data, media_type=mime, headers={"Content-Disposition": f'attachment; filename="{nom}.{ext}"'})
 
@@ -329,6 +397,7 @@ class NouvelUtilisateur(BaseModel):
     password: str
     role: str = "user"
     service_id: Optional[int] = None
+    email: Optional[str] = None
 
 
 class ModifUtilisateur(BaseModel):
@@ -336,11 +405,12 @@ class ModifUtilisateur(BaseModel):
     service_id: Optional[int] = None
     active: Optional[bool] = None
     password: Optional[str] = None
+    email: Optional[str] = None
 
 
 @app.get("/api/admin/users")
 def admin_users(_=Depends(admin_dep)):
-    return S.q("""SELECT u.id, u.username, u.role, u.active, u.service_id, s.name AS service, u.created_at
+    return S.q("""SELECT u.id, u.username, u.email, u.role, u.active, u.service_id, s.name AS service, u.created_at
                   FROM users u LEFT JOIN services s ON s.id=u.service_id ORDER BY u.username""")
 
 
@@ -349,11 +419,11 @@ def admin_creer_user(p: NouvelUtilisateur, _=Depends(admin_dep)):
     if p.role not in ("admin", "user"):
         raise HTTPException(400, "Rôle invalide")
     try:
-        return {"id": S.creer_utilisateur(p.username, p.password, p.role, p.service_id)}
+        return {"id": S.creer_utilisateur(p.username, p.password, p.role, p.service_id, (p.email or "").strip() or None)}
     except ValueError as e:
         raise HTTPException(400, str(e))
     except Exception:
-        raise HTTPException(400, "Nom d'utilisateur déjà pris ou service invalide")
+        raise HTTPException(400, "Nom d'utilisateur ou e-mail déjà utilisé, ou service invalide")
 
 
 @app.patch("/api/admin/users/{uid}")
@@ -368,6 +438,11 @@ def admin_modifier_user(uid: int, p: ModifUtilisateur, a=Depends(admin_dep)):
             raise HTTPException(400, "Au moins 10 caractères")
         S.q("UPDATE users SET pwd_hash=? WHERE id=?", (S.hash_pw(d.pop("password")), uid), write=True)
         S.q("DELETE FROM sessions WHERE user_id=?", (uid,), write=True)
+    if "email" in d:
+        try:
+            S.q("UPDATE users SET email=? WHERE id=?", ((d["email"] or "").strip() or None, uid), write=True)
+        except Exception:
+            raise HTTPException(400, "Adresse e-mail déjà utilisée")
     for champ in ("role", "service_id", "active"):
         if champ in d:
             S.q(f"UPDATE users SET {champ}=? WHERE id=?", (int(d[champ]) if champ == "active" else d[champ], uid), write=True)

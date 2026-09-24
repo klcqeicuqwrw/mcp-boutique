@@ -13,7 +13,7 @@ button{background:#4f46e5;color:#fff;border:0;border-radius:8px;padding:10px 16p
 <form id="f"><img class="logo" src="/static/logo.png" alt="Aiguillon Construction"><h2>Nouveau mot de passe</h2>
 <input id="p1" type="password" placeholder="Nouveau mot de passe (10 caractères min.)" autocomplete="new-password" required>
 <input id="p2" type="password" placeholder="Confirmer le mot de passe" autocomplete="new-password" required>
-<div id="msg"></div><button id="b">Enregistrer</button><a class="ghost" href="/">Retour à la connexion</a></form>
+<div id="msg"></div><button id="b">Enregistrer</button><a href="/">Retour à la connexion</a></form>
 <script>
 const msg=document.getElementById('msg'),token=new URLSearchParams(location.search).get('token')||'';
 document.getElementById('f').onsubmit=async e=>{

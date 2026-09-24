@@ -1,0 +1,50 @@
+/* Charte Aiguillon Construction : blanc, noir, dégradé rose -> rouge du logo */
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap');
+:root{--acc:#ff2200;--grad:linear-gradient(45deg,#ff97d0 0%,#ff5a4f 55%,#ff2200 100%);--bd:#e6e6e6;--mut:#6b6b6b;--ink:#0a0a0a}
+body{font-family:"Manrope","Segoe UI",-apple-system,Roboto,sans-serif!important;color:var(--ink)!important;
+  background:radial-gradient(circle at 92% 8%,#ff97d033,transparent 38%),#fff!important}
+a{color:var(--acc)}
+.btn,button.p,#b{background:var(--grad)!important;color:#fff!important;border:0!important;font-weight:700;border-radius:10px}
+input:focus,select:focus{outline:2px solid #ff220040;border-color:var(--acc)}
+form{border:1px solid var(--bd);box-shadow:0 10px 40px #0000000f}
+.logo{width:230px;align-self:center;display:block;margin:-4px 0 6px}
+h2{font-weight:800}
+th{background:#fdf0ee!important}
+/* Chat : bandeau à droite, dégradé rose -> rouge du cercle */
+[hidden]{display:none!important}
+#main{background:#fafafa}#bar{border-top:1px solid var(--bd)}
+#side{order:2;width:280px!important;padding:14px 0;color:#fff!important;border:0!important;
+  background:linear-gradient(15deg,#ff97d0 0%,#ff5a4f 50%,#ff2200 100%)!important}
+.brand{margin:0 14px 12px;background:#fff;border-radius:14px;padding:12px 14px}.brand img{width:100%;display:block}
+#side button.n{margin:0 14px 10px!important;background:#fff!important;color:var(--acc)!important;border:0!important;
+  border-radius:10px!important;font-weight:800;text-align:center!important;box-shadow:0 2px 8px #0000001f}
+#s{margin:0 14px 10px!important;background:#fff!important;border:0!important;color:var(--ink)!important;border-radius:10px!important}
+#hist{padding:0 14px!important}
+.h{background:#ffffffe6;color:var(--ink);margin-bottom:6px;align-items:center}
+.h:hover,.h.a{background:#fff!important;color:var(--ink)!important}.h.a{box-shadow:inset 4px 0 0 var(--acc)}.h small{color:var(--mut)}
+.ic{width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;font-size:13px;opacity:.55!important}
+.ic:hover{opacity:1!important;background:#0000000f}.ic.del:hover{color:#b00020}
+#who{border:0!important;padding:10px 14px 0!important;gap:8px!important}
+.chip{background:#fff;color:var(--ink);border-radius:999px;padding:6px 12px;font-weight:700;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#who .sb{display:block;width:100%;background:#fff!important;color:var(--acc)!important;border:0!important;border-radius:10px!important;
+  padding:10px 12px!important;font-weight:700;text-align:center!important;text-decoration:none!important;cursor:pointer;box-shadow:0 2px 8px #0000001f}
+#who .sb.alt{color:var(--ink)!important}#who .sb.dark{background:var(--ink)!important;color:#fff!important}#who .sb:hover{filter:brightness(.95)}
+.u .bub{background:var(--grad)!important;color:#fff}
+#opt{display:flex;gap:8px}#opt input{display:none}
+#opt label{border:1px solid var(--bd);background:#fff;border-radius:999px;padding:5px 14px;cursor:pointer;font-size:13px;color:var(--ink);user-select:none}
+#opt label:has(input:checked){background:var(--ink);color:#fff;border-color:var(--ink)}
+.exp button{background:var(--ink)!important;color:#fff!important;border:0!important;border-radius:8px!important;font-weight:600;padding:5px 12px!important}
+.exp button:hover{background:var(--acc)!important}
+/* Boutons secondaires (remplacent les liens texte) */
+.ghost{display:block;background:#fff!important;color:var(--ink)!important;border:1px solid var(--bd)!important;border-radius:10px;
+  padding:10px 16px;font:inherit;font-weight:600;cursor:pointer;text-align:center;text-decoration:none}
+.ghost:hover{border-color:var(--acc)!important;color:var(--acc)!important}
+/* Admin */
+header{background:#fff!important;color:var(--ink)!important;border-bottom:1px solid var(--bd)}
+header a{color:var(--acc)!important}.logo-h{height:34px}
+header b{font-weight:400;letter-spacing:.18em;text-transform:uppercase;font-size:13px}
+nav button{color:var(--ink)!important}nav button.on{background:var(--grad)!important;color:#fff!important}
+.hb{display:inline-block;background:#fff;color:var(--acc)!important;border:1px solid var(--acc);border-radius:10px;padding:8px 14px;font-weight:700;text-decoration:none}
+.hb:hover{background:#fff1ee}.hb.dark{background:var(--ink);border-color:var(--ink);color:#fff!important}.hb.dark:hover{background:#333}
+nav button{border:1px solid var(--bd)!important;border-radius:999px!important}nav button.on{border-color:transparent!important}
+button:not(.p):not(.on):not(.btn):hover{border-color:var(--acc)}

@@ -33,15 +33,20 @@ th,td{border:1px solid var(--bd);padding:6px 10px;text-align:left}th{background:
 #bar{padding:14px 24px;border-top:1px solid var(--bd);background:#fff}
 #f{display:flex;gap:10px;max-width:760px;margin:0 auto}#q{flex:1;border-radius:24px;padding:12px 16px}
 #opt{max-width:760px;margin:0 auto 8px;font-size:14px;color:var(--mut)}.empty{margin:auto;color:var(--mut)}
-</style></head><body>
+#side {
+  order: -1 !important;
+}
+</style>
+<link rel="stylesheet" href="/static/theme.css">
+<link rel="icon" href="/static/icon.png"></head><body>
 
-<div id="side"><h1>Assistant Boutique</h1>
+<div id="side"><div class="brand"><img src="/static/logo.png" alt="Aiguillon Construction"></div>
 <button class="n" id="new">+ Nouvelle conversation</button>
 <input id="s" placeholder="Rechercher une conversation ou une question…" autocomplete="off"><div id="hist"></div>
-<div id="who"><span id="me"></span><a id="adm" href="/admin" hidden>Administration</a>
-<button id="pw">Changer mon mot de passe</button><button id="out">Se déconnecter</button></div></div>
+<div id="who"><span id="me" class="chip"></span><a id="adm" class="sb" href="/admin" hidden>Administration</a>
+<button id="pw" class="sb alt">Changer mon mot de passe</button><button id="out" class="sb dark">Se déconnecter</button></div></div>
 <div id="main"><div id="thread"></div>
-<div id="bar"><div id="opt"><label><input type="checkbox" id="cr" checked> Réponse texte</label> &nbsp; <label><input type="checkbox" id="ct" checked> Tableau</label></div>
+<div id="bar"><div id="opt"><label><input type="checkbox" id="cr" checked> Réponse texte</label><label><input type="checkbox" id="ct" checked> Tableau</label></div>
 <form id="f"><input id="q" placeholder="Ex : Quels sont mes clients VIP ?" autocomplete="off" required>
 <button class="btn">Envoyer</button></form></div></div>
 <script>
@@ -68,7 +73,7 @@ function hist(){$('hist').innerHTML='';const t=$('s').value.trim().toLowerCase()
     if(!hit&&!has(c.titre))return;
     if(hit)snip=`<small style="display:block;opacity:.6;overflow:hidden;text-overflow:ellipsis">${esc(hit.question)}</small>`}
   n++;const d=document.createElement('div');d.className='h'+(c.id===cur?' a':'');
-  d.innerHTML=`<span>${esc(c.titre||'Nouvelle conversation')}${snip}</span><b title="Renommer">✏️</b><b title="Supprimer">❌</b>`;
+  d.innerHTML=`<span>${esc(c.titre||'Nouvelle conversation')}${snip}</span><b class="ic" title="Renommer">✎</b><b class="ic del" title="Supprimer">✕</b>`;
   d.querySelector('span').onclick=()=>{cur=c.id;hist();thread()};
   const [rn,del]=d.querySelectorAll('b');
   rn.onclick=async()=>{const t=prompt('Nouveau nom :',c.titre||'');if(t&&t.trim()){await api('/api/conversations/'+c.id,'PATCH',{titre:t});c.titre=t.trim();hist()}};
@@ -116,7 +121,7 @@ function wire(d,r){const gb=d.querySelector('.gb');if(!gb)return;
     if(old&&typeof Chart!=='undefined')Chart.getChart(old)?.destroy();
     out.innerHTML='<div style="width:min(720px,100%);background:#fff;border:1px solid var(--bd);border-radius:8px;padding:12px"><canvas></canvas></div>';
     chart(out.querySelector('canvas'),r,{type,x,y:pie?ys.slice(0,1):ys,titre:(pie?ys[0]:ys.join(', '))+' par '+x})}}
-const PAL=['#4f46e5','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#14b8a6','#ec4899'];
+const PAL=['#ff2200','#ff97d0','#0a0a0a','#ff7a59','#7a7a7a','#ffb199','#c2185b','#444444'];
 function chart(cv,r,g){g=g||r.graphique;
   if(typeof Chart==='undefined'){cv.parentElement.textContent='Graphique indisponible (bibliothèque Chart.js non chargée).';return}
   const rows=r.rows.slice(0,100),pie=g.type==='pie'||g.type==='doughnut';

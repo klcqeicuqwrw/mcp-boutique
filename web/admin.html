@@ -17,17 +17,19 @@ th{background:#f1f1f4}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:cente
 .perm{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:12px;margin:10px 0}
 .perm label{display:block;margin:4px 0}.perm input[type=text]{width:100%;margin-top:3px}
 #msg{color:#b00020;min-height:18px}
-</style></head><body>
-<header><b>Administration</b><nav>
+</style>
+<link rel="stylesheet" href="/static/theme.css">
+<link rel="icon" href="/static/icon.png"></head><body>
+<header><img class="logo-h" src="/static/logo.png" alt="Aiguillon Construction"><b>Administration</b><nav>
 <button data-t="u" class="on">Comptes</button><button data-t="d">Droits par service</button><button data-t="l">Requêtes SQL</button></nav>
-<a href="/chat">Voir le chat</a> <a href="#" id="out">Se déconnecter</a></header>
+<a class="hb" href="/chat">Voir le chat</a><a class="hb dark" href="#" id="out">Se déconnecter</a></header>
 <main><div id="msg"></div>
 
 <section id="u" class="on"><div class="row">
-<input id="nu" placeholder="Identifiant"><input id="np" type="password" placeholder="Mot de passe (10 car. min.)">
+<input id="nu" placeholder="Identifiant"><input id="ne" type="email" placeholder="E-mail"><input id="np" type="password" placeholder="Mot de passe (10 car. min.)">
 <select id="nr"><option value="user">Utilisateur</option><option value="admin">Admin</option></select>
 <select id="ns"></select><button class="p" id="cu">Créer le compte</button></div>
-<table><thead><tr><th>Identifiant</th><th>Rôle</th><th>Service</th><th>Actif</th><th>Créé le</th><th></th></tr></thead><tbody id="ut"></tbody></table></section>
+<table><thead><tr><th>Identifiant</th><th>E-mail</th><th>Rôle</th><th>Service</th><th>Actif</th><th>Créé le</th><th></th></tr></thead><tbody id="ut"></tbody></table></section>
 
 <section id="d"><div class="row"><input id="sn" placeholder="Nouveau service (ex : Comptabilité)"><button class="p" id="cs">Créer le service</button></div>
 <div id="sv"></div></section>
@@ -57,6 +59,7 @@ async function load(){
   await users();perms();logs()}
 async function users(){const us=await api('/api/admin/users');
   $('ut').innerHTML=us.map(u=>`<tr data-id="${u.id}"><td>${esc(u.username)}</td>
+  <td><input type="email" data-f="email" value="${esc(u.email||'')}" placeholder="—"></td>
   <td><select data-f="role"><option value="user"${u.role==='user'?' selected':''}>Utilisateur</option><option value="admin"${u.role==='admin'?' selected':''}>Admin</option></select></td>
   <td><select data-f="service_id"><option value="">Aucun</option>${services.map(s=>`<option value="${s.id}"${s.id===u.service_id?' selected':''}>${esc(s.name)}</option>`).join('')}</select></td>
   <td><input type="checkbox" data-f="active"${u.active?' checked':''}></td><td>${fmt(u.created_at)}</td>
@@ -67,8 +70,8 @@ async function users(){const us=await api('/api/admin/users');
     try{await api('/api/admin/users/'+id,'PATCH',{[f]:v})}catch{users()}});
   $('ut').querySelectorAll('[data-pw]').forEach(b=>b.onclick=async()=>{
     const p=prompt('Nouveau mot de passe (10 caractères min.) :');if(p){await api('/api/admin/users/'+b.closest('tr').dataset.id,'PATCH',{password:p});alert('Mot de passe réinitialisé')}})}
-$('cu').onclick=async()=>{await api('/api/admin/users','POST',{username:$('nu').value,password:$('np').value,role:$('nr').value,service_id:$('ns').value?+$('ns').value:null});
-  $('nu').value=$('np').value='';users()};
+$('cu').onclick=async()=>{await api('/api/admin/users','POST',{username:$('nu').value,password:$('np').value,role:$('nr').value,service_id:$('ns').value?+$('ns').value:null,email:$('ne').value||null});
+  $('nu').value=$('np').value=$('ne').value='';users()};
 $('cs').onclick=async()=>{await api('/api/admin/services','POST',{name:$('sn').value});$('sn').value='';load()};
 function perms(){$('sv').innerHTML=services.length?'':'<p class="mut">Créez un premier service pour définir ses droits.</p>';
   services.forEach(s=>{const d=document.createElement('div');d.className='perm';
