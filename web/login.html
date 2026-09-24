@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connexion – Assistant Boutique</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#1e1e2e;font:15px -apple-system,"Segoe UI",Roboto,sans-serif}
+form{background:#fff;padding:28px;border-radius:12px;width:320px;display:flex;flex-direction:column;gap:12px}
+h2{margin:0}input{padding:10px 12px;border:1px solid #e5e5e8;border-radius:8px;font:inherit}
+button{background:#4f46e5;color:#fff;border:0;border-radius:8px;padding:10px 16px;font:inherit;cursor:pointer}button:disabled{opacity:.5}
+#err{color:#b00020;font-size:13px;min-height:16px}
+</style></head><body>
+<form id="lf"><h2>Connexion</h2>
+<input id="u" placeholder="Identifiant" autocomplete="username" required autofocus>
+<input id="p" type="password" placeholder="Mot de passe" autocomplete="current-password" required>
+<div id="err"></div><button id="b">Se connecter</button></form>
+<script>
+document.getElementById('lf').onsubmit=async e=>{
+  e.preventDefault();const err=document.getElementById('err'),b=document.getElementById('b');err.textContent='';b.disabled=true;
+  try{
+    const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'fetch'},
+      body:JSON.stringify({username:document.getElementById('u').value,password:document.getElementById('p').value})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){err.textContent=typeof d.detail==='string'?d.detail:'Erreur';b.disabled=false;return}
+    location.href='/';   // le serveur redirige vers /admin ou /chat selon le rôle
+  }catch{err.textContent='Erreur réseau';b.disabled=false}
+};
+</script></body></html>

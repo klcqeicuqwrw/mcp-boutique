@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assistant Boutique</title>
+<style>
+:root{--acc:#4f46e5;--bd:#e5e5e8;--mut:#7a7a85;--side:#1e1e2e}
+*{box-sizing:border-box}body{margin:0;font:15px -apple-system,"Segoe UI",Roboto,sans-serif;color:#1f1f28;background:#f7f7f8;display:flex;height:100vh;overflow:hidden}
+button{font:inherit;cursor:pointer}
+#login{position:fixed;inset:0;background:var(--side);display:flex;align-items:center;justify-content:center;z-index:9}
+#login form{background:#fff;padding:28px;border-radius:12px;width:320px;display:flex;flex-direction:column;gap:12px}
+input,select{padding:10px 12px;border:1px solid var(--bd);border-radius:8px;font:inherit}
+.btn{background:var(--acc);color:#fff;border:0;border-radius:8px;padding:10px 16px}
+#err{color:#b00020;font-size:13px;min-height:16px}
+#side{width:260px;background:var(--side);color:#d8d8e0;display:flex;flex-direction:column;flex-shrink:0}
+#side h1{font-size:15px;margin:0;padding:18px 16px;border-bottom:1px solid #ffffff14}
+#side button.n{margin:12px;padding:10px;background:#ffffff10;border:1px solid #ffffff1a;border-radius:8px;color:inherit;text-align:left}
+#hist{flex:1;overflow:auto;padding:0 8px}
+.h{padding:9px 12px;border-radius:8px;font-size:13px;display:flex;gap:6px;cursor:pointer}
+.h:hover{background:#ffffff14}.h.a{background:#6366f140;color:#fff}.h span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.h b{font-weight:400;opacity:.6}.h b:hover{opacity:1}
+#who{padding:12px 16px;font-size:13px;border-top:1px solid #ffffff14;display:flex;flex-direction:column;gap:6px}
+#who a,#who button{color:#a5b4fc;background:none;border:0;padding:0;text-align:left;text-decoration:underline;font-size:13px}
+#main{flex:1;display:flex;flex-direction:column;min-width:0}
+#thread{flex:1;overflow:auto;padding:24px;display:flex;flex-direction:column;gap:16px}
+.m{max-width:760px;display:flex;flex-direction:column;gap:6px}.m.u{align-self:flex-end;align-items:flex-end}
+.bub{padding:11px 15px;border-radius:14px;background:#fff;border:1px solid var(--bd);line-height:1.5}
+.u .bub{background:var(--acc);color:#fff;border:0}.bub.e{background:#fef2f2;border-color:#fecaca;color:#b00020}
+.sql{font:12px Consolas,monospace;color:var(--mut);background:#f1f1f4;border-radius:6px;padding:6px 10px}
+.tw{overflow:auto;max-width:100%}table{border-collapse:collapse;font-size:13px;background:#fff}
+th,td{border:1px solid var(--bd);padding:6px 10px;text-align:left}th{background:#f1f1f4}
+.exp{font-size:13px;color:var(--mut);display:flex;gap:8px;align-items:center}
+.exp select{padding:4px 8px}.exp button{padding:4px 10px;border:1px solid var(--bd);background:#fff;border-radius:6px}
+#bar{padding:14px 24px;border-top:1px solid var(--bd);background:#fff}
+#f{display:flex;gap:10px;max-width:760px;margin:0 auto}#q{flex:1;border-radius:24px;padding:12px 16px}
+#opt{max-width:760px;margin:0 auto 8px;font-size:14px;color:var(--mut)}.empty{margin:auto;color:var(--mut)}
+</style></head><body>
+
+<div id="side"><h1>Assistant Boutique</h1>
+<button class="n" id="new">+ Nouvelle conversation</button><div id="hist"></div>
+<div id="who"><span id="me"></span><a id="adm" href="/admin" hidden>Administration</a>
+<button id="pw">Changer mon mot de passe</button><button id="out">Se déconnecter</button></div></div>
+<div id="main"><div id="thread"></div>
+<div id="bar"><div id="opt"><label><input type="checkbox" id="cr" checked> Réponse texte</label></div>
+<form id="f"><input id="q" placeholder="Ex : Quels sont mes clients VIP ?" autocomplete="off" required>
+<button class="btn">Envoyer</button></form></div></div>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>{const d=document.createElement('div');d.textContent=s??'';return d.innerHTML};
+let convs=[],cur=null;
+async function api(path,method='GET',body){
+  const r=await fetch(path,{method,headers:{'Content-Type':'application/json','X-Requested-With':'fetch'},body:body&&JSON.stringify(body)});
+  const d=await r.json().catch(()=>({}));
+  if(r.status===401){location.href='/'}
+  if(!r.ok)throw new Error(typeof d.detail==='string'?d.detail:'Erreur');
+  return d}
+async function start(){
+  try{const me=await api('/api/me');
+    $('me').textContent=me.username+(me.service?' · '+me.service:'');$('adm').hidden=me.role!=='admin';
+    convs=await api('/api/conversations');cur=convs[0]?.id||null;hist();thread()}catch{}}
+$('out').onclick=async()=>{await api('/api/logout','POST');location.href='/'};
+$('pw').onclick=async()=>{const a=prompt('Mot de passe actuel :');if(!a)return;const n=prompt('Nouveau (10 caractères min.) :');if(!n)return;
+  try{await api('/api/password','POST',{ancien:a,nouveau:n});alert('Mot de passe modifié')}catch(x){alert(x.message)}};
+const conv=()=>convs.find(c=>c.id===cur);
+function hist(){$('hist').innerHTML='';convs.forEach(c=>{
+  const d=document.createElement('div');d.className='h'+(c.id===cur?' a':'');
+  d.innerHTML=`<span>${esc(c.titre||'Nouvelle conversation')}</span><b title="Renommer">✏️</b><b title="Supprimer">❌</b>`;
+  d.querySelector('span').onclick=()=>{cur=c.id;hist();thread()};
+  const [rn,del]=d.querySelectorAll('b');
+  rn.onclick=async()=>{const t=prompt('Nouveau nom :',c.titre||'');if(t&&t.trim()){await api('/api/conversations/'+c.id,'PATCH',{titre:t});c.titre=t.trim();hist()}};
+  del.onclick=async()=>{if(!confirm('Supprimer cette conversation ?'))return;await api('/api/conversations/'+c.id,'DELETE');
+    convs=convs.filter(x=>x.id!==c.id);if(cur===c.id)cur=convs[0]?.id||null;hist();thread()};
+  $('hist').appendChild(d)})}
+function thread(){const t=$('thread');t.innerHTML='';const c=conv();
+  if(!c||!c.messages.length){t.innerHTML='<div class="empty">Posez une question sur vos données.</div>';return}
+  c.messages.forEach(m=>{bubble('u',esc(m.question));assistant(m)});t.scrollTop=t.scrollHeight}
+function bubble(cls,html){const d=document.createElement('div');d.className='m '+cls;d.innerHTML=`<div class="bub${cls==='e'?' e':''}">${html}</div>`;
+  $('thread').appendChild(d);d.scrollIntoView();return d}
+function assistant(m){
+  if(m.erreur){bubble('a e',esc(m.erreur));if(m.sql_genere){}return}
+  const d=document.createElement('div');d.className='m a';let h='';
+  if(m.reponse)h+=`<div class="bub">${esc(m.reponse)}</div>`;
+  const r=m.resultats;
+  if(r&&r.rows.length){h+='<div class="tw"><table><thead><tr>'+r.columns.map(c=>`<th>${esc(c)}</th>`).join('')+'</tr></thead><tbody>'+
+    r.rows.map(x=>'<tr>'+r.columns.map(c=>`<td>${esc(String(x[c]??''))}</td>`).join('')+'</tr>').join('')+'</tbody></table></div>';
+    if(r.truncated)h+='<div class="exp">Résultat limité à '+r.row_count+' lignes.</div>';
+    h+=`<div class="exp">Exporter :<select>${['csv','xlsx','json','tsv','md'].map(f=>`<option>${f}</option>`).join('')}</select><button>Télécharger</button></div>`}
+  if(m.sql_genere)h+=`<div class="sql">${esc(m.sql_genere)}</div>`;
+  d.innerHTML=h||'<div class="bub"><em>Aucun résultat.</em></div>';
+  const b=d.querySelector('.exp button');
+  if(b)b.onclick=()=>{location.href=`/api/export/${m.id}?format=${d.querySelector('.exp select').value}`};
+  $('thread').appendChild(d)}
+$('new').onclick=async()=>{const c=await api('/api/conversations','POST');convs.unshift(c);cur=c.id;hist();thread();$('q').focus()};
+$('f').onsubmit=async e=>{e.preventDefault();const q=$('q').value.trim();if(!q)return;
+  if(!conv()){const c=await api('/api/conversations','POST');convs.unshift(c);cur=c.id}
+  const c=conv();if(!c.messages.length)$('thread').innerHTML='';
+  bubble('u',esc(q));$('q').value='';$('q').disabled=true;const w=bubble('a','<i>Recherche en cours…</i>');
+  const m={question:q};
+  try{const r=await api('/api/ask','POST',{conv_id:c.id,question:q,veut_reponse:$('cr').checked});
+    Object.assign(m,{id:r.id,reponse:r.reponse,sql_genere:r.sql_genere,resultats:r.resultats})}
+  catch(x){m.erreur=x.message}
+  w.remove();assistant(m);c.messages.push(m);if(!c.titre)c.titre=q.slice(0,80);hist();
+  $('q').disabled=false;$('q').focus()};
+start();
+</script></body></html>
