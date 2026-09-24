@@ -1,31 +1,34 @@
 <!DOCTYPE html>
 <html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Nouveau mot de passe</title>
+<title>Connexion – Assistant Boutique</title>
 <style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#1e1e2e;font:15px -apple-system,"Segoe UI",Roboto,sans-serif}
-form{background:#fff;padding:28px;border-radius:12px;width:340px;display:flex;flex-direction:column;gap:12px}
+form{background:#fff;padding:28px;border-radius:12px;width:320px;display:flex;flex-direction:column;gap:12px}
 h2{margin:0}input{padding:10px 12px;border:1px solid #e5e5e8;border-radius:8px;font:inherit}
 button{background:#4f46e5;color:#fff;border:0;border-radius:8px;padding:10px 16px;font:inherit;cursor:pointer}button:disabled{opacity:.5}
-#msg{font-size:13px;min-height:16px;color:#b00020}#msg.ok{color:#0a7d33}a{color:#4f46e5}
+#err{color:#b00020;font-size:13px;min-height:16px}
 </style>
 <link rel="stylesheet" href="/static/theme.css">
 <link rel="icon" href="/static/icon.png"></head><body>
-<form id="f"><img class="logo" src="/static/logo.png" alt="Aiguillon Construction"><h2>Nouveau mot de passe</h2>
-<input id="p1" type="password" placeholder="Nouveau mot de passe (10 caractères min.)" autocomplete="new-password" required>
-<input id="p2" type="password" placeholder="Confirmer le mot de passe" autocomplete="new-password" required>
-<div id="msg"></div><button id="b">Enregistrer</button><a class="ghost" href="/">Retour à la connexion</a></form>
+<form id="lf"><img class="logo" src="/static/logo.png" alt="Aiguillon Construction"><h2>Connexion</h2>
+<input id="u" placeholder="Identifiant" autocomplete="username" required autofocus>
+<input id="p" type="password" placeholder="Mot de passe" autocomplete="current-password" required>
+<div id="err"></div><button id="b">Se connecter</button><button type="button" id="fg" class="ghost">Mot de passe oublié ?</button></form>
 <script>
-const msg=document.getElementById('msg'),token=new URLSearchParams(location.search).get('token')||'';
-document.getElementById('f').onsubmit=async e=>{
-  e.preventDefault();msg.className='';msg.textContent='';
-  const a=document.getElementById('p1').value;
-  if(a!==document.getElementById('p2').value){msg.textContent='Les deux mots de passe sont différents.';return}
-  document.getElementById('b').disabled=true;
+document.getElementById('lf').onsubmit=async e=>{
+  e.preventDefault();const err=document.getElementById('err'),b=document.getElementById('b');err.textContent='';b.disabled=true;
   try{
-    const r=await fetch('/api/reinit',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'fetch'},body:JSON.stringify({token,nouveau:a})});
+    const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'fetch'},
+      body:JSON.stringify({username:document.getElementById('u').value,password:document.getElementById('p').value})});
     const d=await r.json().catch(()=>({}));
-    if(!r.ok){msg.textContent=typeof d.detail==='string'?d.detail:'Erreur';document.getElementById('b').disabled=false;return}
-    msg.className='ok';msg.textContent='Mot de passe modifié. Redirection…';setTimeout(()=>location.href='/',1500);
-  }catch{msg.textContent='Erreur réseau';document.getElementById('b').disabled=false}
+    if(!r.ok){err.textContent=typeof d.detail==='string'?d.detail:'Erreur';b.disabled=false;return}
+    location.replace(d.redirect||'/');
+  }catch{err.textContent='Erreur réseau';b.disabled=false}
+};
+document.getElementById('fg').onclick=async e=>{
+  e.preventDefault();const m=prompt("Adresse e-mail de votre compte :");if(!m)return;
+  await fetch('/api/mdp-oublie',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'fetch'},body:JSON.stringify({email:m})}).catch(()=>{});
+  document.getElementById('err').style.color='#0a7d33';
+  document.getElementById('err').textContent="Si un compte correspond à cette adresse, un e-mail vient d'être envoyé.";
 };
 </script></body></html>

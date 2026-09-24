@@ -43,21 +43,26 @@ th{background:#f1f1f4}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:cente
 const $=id=>document.getElementById(id);
 const esc=s=>{const d=document.createElement('div');d.textContent=s??'';return d.innerHTML};
 const fmt=t=>new Date(t*1000).toLocaleString('fr-FR');
+const fail=t=>{$('msg').textContent+=($('msg').textContent?' — ':'')+t};
 async function api(p,m='GET',b){
-  const r=await fetch(p,{method:m,headers:{'Content-Type':'application/json','X-Requested-With':'fetch'},body:b&&JSON.stringify(b)});
-  const d=await r.json().catch(()=>({}));
-  if(r.status===401)location.href='/';
-  if(!r.ok){$('msg').textContent=typeof d.detail==='string'?d.detail:'Erreur';throw new Error()}
-  $('msg').textContent='';return d}
+  let r,d;
+  try{r=await fetch(p,{method:m,headers:{'Content-Type':'application/json','X-Requested-With':'fetch'},body:b&&JSON.stringify(b)});
+    d=await r.json().catch(()=>({}))}
+  catch{fail('Erreur réseau ('+p+')');throw new Error('réseau')}
+  if(r.status===401){location.href='/';throw new Error('401')}
+  if(!r.ok){const t=typeof d.detail==='string'?d.detail:'erreur serveur';fail(`${p} → ${r.status} : ${t}`);throw new Error(t)}
+  return d}
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('nav button,section').forEach(e=>e.classList.remove('on'));
   b.classList.add('on');$(b.dataset.t).classList.add('on')});
 let services=[],schema={};
 async function load(){
-  schema=await api('/api/admin/schema');services=await api('/api/admin/services');
+  $('msg').textContent='';
+  const get=async(p,def)=>{try{return await api(p)}catch{return def}};
+  schema=await get('/api/admin/schema',{});services=await get('/api/admin/services',[]);
   $('ns').innerHTML='<option value="">Sans service</option>'+services.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
   await users();perms();logs()}
-async function users(){const us=await api('/api/admin/users');
+async function users(){const us=await api('/api/admin/users').catch(()=>[]);
   $('ut').innerHTML=us.map(u=>`<tr data-id="${u.id}"><td>${esc(u.username)}</td>
   <td><input type="email" data-f="email" value="${esc(u.email||'')}" placeholder="—"></td>
   <td><select data-f="role"><option value="user"${u.role==='user'?' selected':''}>Utilisateur</option><option value="admin"${u.role==='admin'?' selected':''}>Admin</option></select></td>
@@ -70,7 +75,7 @@ async function users(){const us=await api('/api/admin/users');
     try{await api('/api/admin/users/'+id,'PATCH',{[f]:v})}catch{users()}});
   $('ut').querySelectorAll('[data-pw]').forEach(b=>b.onclick=async()=>{
     const p=prompt('Nouveau mot de passe (10 caractères min.) :');if(p){await api('/api/admin/users/'+b.closest('tr').dataset.id,'PATCH',{password:p});alert('Mot de passe réinitialisé')}})}
-$('cu').onclick=async()=>{await api('/api/admin/users','POST',{username:$('nu').value,password:$('np').value,role:$('nr').value,service_id:$('ns').value?+$('ns').value:null,email:$('ne').value||null});
+$('cu').onclick=async()=>{$('msg').textContent='';await api('/api/admin/users','POST',{username:$('nu').value,password:$('np').value,role:$('nr').value,service_id:$('ns').value?+$('ns').value:null,email:$('ne').value||null});
   $('nu').value=$('np').value=$('ne').value='';users()};
 $('cs').onclick=async()=>{await api('/api/admin/services','POST',{name:$('sn').value});$('sn').value='';load()};
 function perms(){$('sv').innerHTML=services.length?'':'<p class="mut">Créez un premier service pour définir ses droits.</p>';
@@ -79,14 +84,14 @@ function perms(){$('sv').innerHTML=services.length?'':'<p class="mut">Créez un 
     d.innerHTML=`<b>${esc(s.name)}</b><p class="mut">Cochez les tables accessibles. Laissez les colonnes vides pour tout autoriser, ou listez-les séparées par des virgules.</p>`+
     Object.entries(schema).map(([t,cols])=>`<label><input type="checkbox" data-t="${esc(t)}"${t in map?' checked':''}> ${esc(t)}
     <span class="mut">(${esc(cols.join(', '))})</span><input type="text" data-c="${esc(t)}" placeholder="colonnes autorisées (optionnel)" value="${esc((map[t]||[]).join(', '))}"></label>`).join('')+
-    '<button class="p">Enregistrer les droits</button>';
+    (Object.keys(schema).length?'':'<p class="ko">Aucune table disponible : voir l\'erreur en rouge en haut de la page.</p>')+'<button class="p">Enregistrer les droits</button>';
     d.querySelector('button').onclick=async()=>{
       const droits=[...d.querySelectorAll('[data-t]')].filter(c=>c.checked).map(c=>{
         const v=d.querySelector(`[data-c="${c.dataset.t}"]`).value.split(',').map(x=>x.trim()).filter(Boolean);
         return{table:c.dataset.t,columns:v.length?v:null}});
-      await api(`/api/admin/services/${s.id}/permissions`,'PUT',droits);$('msg').textContent='';alert('Droits enregistrés')};
+      $('msg').textContent='';await api(`/api/admin/services/${s.id}/permissions`,'PUT',droits);alert('Droits enregistrés')};
     $('sv').appendChild(d)})}
-async function logs(){const l=await api(`/api/admin/logs?username=${encodeURIComponent($('lu').value)}&status=${encodeURIComponent($('ls').value)}`);
+async function logs(){const l=await api(`/api/admin/logs?username=${encodeURIComponent($('lu').value)}&status=${encodeURIComponent($('ls').value)}`).catch(()=>[]);
   $('lt').innerHTML=l.map(r=>`<tr><td>${fmt(r.created_at)}</td><td>${esc(r.username)}</td><td>${esc(r.question)}</td>
   <td class="sql">${esc(r.sql)}</td><td class="${r.status==='ok'?'':'ko'}">${esc(r.status)}</td><td>${r.row_count??''}</td><td>${r.duration_ms??''}</td></tr>`).join('')}
 $('lr').onclick=logs;$('out').onclick=async e=>{e.preventDefault();await api('/api/logout','POST');location.href='/'};load();

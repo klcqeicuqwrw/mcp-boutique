@@ -1,11 +1,53 @@
 """Authentification, droits d'accès aux données et journal des requêtes SQL."""
-import hashlib, hmac, json, os, secrets, sqlite3, time
+import hashlib, hmac, json, os, re, secrets, sqlite3, time
 from contextlib import closing
 from pathlib import Path
 
 APP_DB = Path(os.environ.get("APP_DB_PATH", "app.db")).expanduser().resolve()
 SESSION_TTL = 12 * 3600
 _echecs: dict = {}
+BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8000").rstrip("/")
+
+
+# --- Accès en lecture seule à la base métier (boutique.db) --------------------------
+DATABASE_PATH = Path(os.environ.get("SQLITE_DB_PATH", "boutique.db")).expanduser().resolve()
+
+
+def _connect_read_only() -> sqlite3.Connection:
+    if not DATABASE_PATH.is_file():
+        raise FileNotFoundError(
+            f"Base SQLite introuvable : {DATABASE_PATH}. Lancez le serveur depuis le dossier contenant "
+            "boutique.db ou définissez SQLITE_DB_PATH.")
+    connection = sqlite3.connect(f"{DATABASE_PATH.as_uri()}?mode=ro", uri=True)
+    connection.row_factory = sqlite3.Row
+    return connection
+
+
+def _remove_leading_comments(query: str) -> str:
+    remaining = query.lstrip()
+    while remaining.startswith("--") or remaining.startswith("/*"):
+        if remaining.startswith("--"):
+            end = remaining.find("\n")
+            if end == -1:
+                return ""
+            remaining = remaining[end + 1:].lstrip()
+            continue
+        end = remaining.find("*/", 2)
+        if end == -1:
+            return ""
+        remaining = remaining[end + 2:].lstrip()
+    return remaining
+
+
+def _validate_read_query(query: str) -> str:
+    query = _remove_leading_comments(query.strip())
+    if not query:
+        raise ValueError("La requête SQL ne peut pas être vide.")
+    if ";" in query.rstrip(";"):
+        raise ValueError("Une seule requête SQL est autorisée.")
+    if not re.match(r"^(SELECT|WITH|EXPLAIN)\b", query, re.IGNORECASE):
+        raise ValueError("Seules les requêtes SELECT, WITH et EXPLAIN sont autorisées.")
+    return query.rstrip(";").strip()
 
 
 def q(sql, args=(), one=False, write=False):
@@ -45,6 +87,19 @@ def init_db():
         CREATE TABLE IF NOT EXISTS query_log(id INTEGER PRIMARY KEY, user_id INTEGER, username TEXT,
             question TEXT, sql TEXT, status TEXT, row_count INTEGER, duration_ms INTEGER, created_at REAL);
         """)
+        # migration : e-mail des comptes + jetons de réinitialisation
+        if "email" not in [r[1] for r in c.execute("PRAGMA table_info(users)")]:
+            c.execute("ALTER TABLE users ADD COLUMN email TEXT")
+        c.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_email ON users(email)")
+        c.execute("CREATE TABLE IF NOT EXISTS resets(token_hash TEXT PRIMARY KEY, "
+                  "user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires REAL NOT NULL)")
+        # migration : anciens résultats enregistrés avec des séquences \uXXXX -> texte lisible
+        for mid, res in c.execute(r"SELECT id, resultats FROM messages WHERE resultats LIKE '%\u%'").fetchall():
+            try:
+                c.execute("UPDATE messages SET resultats=? WHERE id=?",
+                          (json.dumps(json.loads(res), ensure_ascii=False, default=str), mid))
+            except ValueError:
+                pass
         c.executemany("INSERT OR IGNORE INTO services(name) VALUES(?)",
                       [("Marketing",), ("Finance",), ("RH",), ("DSI",)])
         c.commit()
@@ -57,20 +112,20 @@ def init_db():
 # --- Mots de passe et sessions ------------------------------------------------
 
 def hash_pw(p, salt=None):
-    salt = salt or secrets.token_bytes(16)
-    return salt.hex() + "$" + hashlib.scrypt(p.encode(), salt=salt, n=2**14, r=8, p=1).hex()
+    """Mots de passe stockés en clair (choix assumé) : aucune transformation."""
+    return p
 
 
 def check_pw(p, stored):
-    salt, h = stored.split("$")
-    return hmac.compare_digest(hash_pw(p, bytes.fromhex(salt)).split("$")[1], h)
+    """Comparaison en temps constant (évite de révéler le mot de passe par le temps de réponse)."""
+    return hmac.compare_digest(str(p).encode(), str(stored).encode())
 
 
-def creer_utilisateur(username, password, role="user", service_id=None):
+def creer_utilisateur(username, password, role="user", service_id=None, email=None):
     if len(password) < 10:
         raise ValueError("Le mot de passe doit contenir au moins 10 caractères.")
-    return q("INSERT INTO users(username,pwd_hash,role,service_id,created_at) VALUES(?,?,?,?,?)",
-             (username.strip(), hash_pw(password), role, service_id, time.time()), write=True)
+    return q("INSERT INTO users(username,pwd_hash,role,service_id,created_at,email) VALUES(?,?,?,?,?,?)",
+             (username.strip(), hash_pw(password), role, service_id, time.time(), email), write=True)
 
 
 def login(username, password):
@@ -102,6 +157,62 @@ def user_from_token(token):
 
 def logout(token):
     q("DELETE FROM sessions WHERE token_hash=?", (hashlib.sha256(token.encode()).hexdigest(),), write=True)
+
+
+# --- Récupération du mot de passe par e-mail --------------------------------------
+
+def creer_reset(email):
+    """Retourne (utilisateur, jeton) si l'e-mail correspond à un compte actif, sinon None.
+    Jeton à usage unique, valable 30 min, stocké haché."""
+    u = q("SELECT * FROM users WHERE lower(email)=lower(?) AND active=1", (email.strip(),), one=True)
+    if not u:
+        return None
+    token = secrets.token_urlsafe(32)
+    q("DELETE FROM resets WHERE user_id=?", (u["id"],), write=True)
+    q("INSERT INTO resets VALUES(?,?,?)",
+      (hashlib.sha256(token.encode()).hexdigest(), u["id"], time.time() + 1800), write=True)
+    return u, token
+
+
+def appliquer_reset(token, nouveau):
+    if len(nouveau) < 10:
+        raise ValueError("Le mot de passe doit contenir au moins 10 caractères.")
+    h = hashlib.sha256(token.encode()).hexdigest()
+    r = q("SELECT user_id FROM resets WHERE token_hash=? AND expires>?", (h, time.time()), one=True)
+    if not r:
+        raise ValueError("Lien invalide ou expiré. Refaites une demande de réinitialisation.")
+    q("UPDATE users SET pwd_hash=? WHERE id=?", (hash_pw(nouveau), r["user_id"]), write=True)
+    q("DELETE FROM resets WHERE user_id=?", (r["user_id"],), write=True)
+    q("DELETE FROM sessions WHERE user_id=?", (r["user_id"],), write=True)
+
+
+def envoyer_mail(dest, sujet, corps):
+    """Envoi SMTP (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM).
+    Sans SMTP_HOST (mode test), le message est affiché dans la console du serveur."""
+    hote = os.environ.get("SMTP_HOST")
+    if not hote:
+        print(f"[SECURITE] SMTP non configuré. E-mail pour {dest} :\n{corps}")
+        return
+    import smtplib, ssl
+    from email.message import EmailMessage
+    m = EmailMessage()
+    m["From"] = os.environ.get("SMTP_FROM") or os.environ.get("SMTP_USER", "")
+    m["To"], m["Subject"] = dest, sujet
+    m.set_content(corps)
+    port = int(os.environ.get("SMTP_PORT", "587"))
+    try:
+        ctx = ssl.create_default_context()
+        if port == 465:
+            s = smtplib.SMTP_SSL(hote, port, timeout=15, context=ctx)
+        else:
+            s = smtplib.SMTP(hote, port, timeout=15)
+            s.starttls(context=ctx)
+        with s:
+            if os.environ.get("SMTP_USER"):
+                s.login(os.environ["SMTP_USER"], os.environ.get("SMTP_PASSWORD", ""))
+            s.send_message(m)
+    except Exception as e:
+        print(f"[SECURITE] Échec d'envoi de l'e-mail : {e}")
 
 
 # --- Droits d'accès aux données ------------------------------------------------
@@ -138,7 +249,6 @@ def _authorizer(allowed):
 
 def tables_info():
     """{table: [colonnes]} de toute la base métier (pour l'interface admin)."""
-    from api import _connect_read_only
     with closing(_connect_read_only()) as c:
         noms = [r[0] for r in c.execute(
             "SELECT name FROM sqlite_master WHERE type IN ('table','view') "
@@ -148,7 +258,6 @@ def tables_info():
 
 def schema_text(allowed):
     """Schéma filtré selon les droits : c'est le seul que voit le modèle IA."""
-    from api import _connect_read_only
     lignes = []
     with closing(_connect_read_only()) as c:
         for t in tables_info():
@@ -165,7 +274,6 @@ def schema_text(allowed):
 
 
 def run_query(user, sql, max_rows=500):
-    from api import _connect_read_only, _validate_read_query
     sql = _validate_read_query(sql)
     with closing(_connect_read_only()) as c:
         c.set_authorizer(_authorizer(allowed_for(user)))
@@ -174,7 +282,7 @@ def run_query(user, sql, max_rows=500):
             cols = [d[0] for d in cur.description or []]
             rows = cur.fetchmany(max_rows + 1)
         except sqlite3.DatabaseError as e:
-            if "not authorized" in str(e):
+            if "not authorized" in str(e) or "prohibited" in str(e):
                 raise PermissionError("Accès refusé : cette requête touche des données non autorisées pour votre service.") from e
             raise RuntimeError(f"Erreur SQLite : {e}") from e
     trunc = len(rows) > max_rows

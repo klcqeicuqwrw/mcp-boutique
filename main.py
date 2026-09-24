@@ -92,7 +92,7 @@ def accueil(request: Request):
     """Non connecté -> connexion ; admin -> /admin ; utilisateur -> /chat."""
     u = _user_or_none(request)
     if not u:
-        return FileResponse(WEB / "login.html")
+        return FileResponse(WEB / "login.html", headers={"Cache-Control": "no-store"})
     return RedirectResponse("/admin" if u["role"] == "admin" else "/chat")
 
 
@@ -135,7 +135,11 @@ def login(p: Login, response: Response):
         raise HTTPException(401, "Identifiants invalides")
     response.set_cookie("session", token, httponly=True, samesite="strict",
                         secure=COOKIE_SECURE, max_age=S.SESSION_TTL)
-    return {"ok": True}
+    u = S.user_from_token(token)
+    if not u:
+        raise HTTPException(500, "Session impossible à initialiser")
+    response.headers["Cache-Control"] = "no-store"
+    return {"ok": True, "redirect": "/admin" if u["role"] == "admin" else "/chat"}
 
 
 @app.post("/api/logout")
@@ -267,7 +271,10 @@ def ask(p: Question, u=Depends(user_dep)):
         raise HTTPException(400, "La question ne peut pas être vide.")
     conv = _conv(p.conv_id, u)
     allowed = S.allowed_for(u)
-    schema = S.schema_text(allowed)
+    try:
+        schema = S.schema_text(allowed)
+    except Exception as e:
+        raise HTTPException(500, f"Base métier inaccessible : {e}")
     if not schema:
         raise HTTPException(403, "Aucune donnée n'est accessible à votre service. Contactez un administrateur.")
 
@@ -282,7 +289,7 @@ def ask(p: Question, u=Depends(user_dep)):
         return S.q("INSERT INTO messages(conv_id,question,reponse,sql,resultats,erreur,created_at) "
                    "VALUES(?,?,?,?,?,?,?)",
                    (conv["id"], question, kw.get("reponse"), kw.get("sql"),
-                    json.dumps(kw["resultats"], default=str) if kw.get("resultats") else None,
+                    json.dumps(kw["resultats"], default=str, ensure_ascii=False) if kw.get("resultats") else None,
                     kw.get("erreur"), time.time()), write=True)
 
     try:
@@ -491,7 +498,10 @@ def admin_droits(sid: int, droits: List[Droit], _=Depends(admin_dep)):
 
 @app.get("/api/admin/schema")
 def admin_schema(_=Depends(admin_dep)):
-    return S.tables_info()
+    try:
+        return S.tables_info()
+    except Exception as e:
+        raise HTTPException(500, f"Base métier inaccessible : {e}")
 
 
 @app.get("/api/admin/logs")
