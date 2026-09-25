@@ -15,13 +15,18 @@ table{border-collapse:collapse;width:100%;background:#fff;margin:12px 0}th,td{bo
 th{background:#f1f1f4}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
 .sql{font:12px Consolas,monospace;white-space:pre-wrap;max-width:420px}.ko{color:#b00020}.mut{color:var(--mut)}
 .perm{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:12px;margin:10px 0}
+.stat{display:flex;gap:10px;margin:0 0 12px}.stat div{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:10px 14px}
+.stat b{display:block;font-size:18px}.stat span{color:var(--mut);font-size:12px}
+.gdet{white-space:pre-wrap;font:12px Consolas,monospace;max-width:520px;max-height:120px;overflow:auto;background:#f7f7f8;border-radius:6px;padding:6px 8px;margin-top:4px}
+.gtog{font-size:12px;color:var(--acc);cursor:pointer;border:0;background:none;padding:0}
+td.tk{white-space:nowrap;font-variant-numeric:tabular-nums}.ko2{color:#b00020}
 .perm label{display:block;margin:4px 0}.perm input[type=text]{width:100%;margin-top:3px}
 #msg{color:#b00020;min-height:18px}
 </style>
 <link rel="stylesheet" href="/static/theme.css">
 <link rel="icon" href="/static/icon.png"></head><body>
 <header><img class="logo-h" src="/static/logo.png" alt="Aiguillon Construction"><b>Administration</b><nav>
-<button data-t="u" class="on">Comptes</button><button data-t="d">Droits par service</button><button data-t="l">Requêtes SQL</button></nav>
+<button data-t="u" class="on">Comptes</button><button data-t="d">Droits par service</button><button data-t="l">Requêtes SQL</button><button data-t="g">Échanges IA</button></nav>
 <a class="hb" href="/chat">Voir le chat</a><a class="hb dark" href="#" id="out">Se déconnecter</a></header>
 <main><div id="msg"></div>
 
@@ -38,10 +43,16 @@ th{background:#f1f1f4}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:cente
 <select id="ls"><option value="">Tous statuts</option><option>ok</option><option>refusé</option><option>erreur</option></select>
 <button id="lr">Actualiser</button></div>
 <table><thead><tr><th>Date</th><th>Utilisateur</th><th>Question</th><th>SQL</th><th>Statut</th><th>Lignes</th><th>ms</th></tr></thead><tbody id="lt"></tbody></table></section>
+
+<section id="g"><div class="stat" id="gstat"></div>
+<div class="row"><input id="gu" placeholder="Filtrer par utilisateur">
+<select id="gk"><option value="">Tous types</option><option value="sql">Génération SQL</option><option value="texte">Formulation réponse</option></select>
+<button id="gr">Actualiser</button></div>
+<table><thead><tr><th>Date</th><th>Utilisateur</th><th>Type</th><th>Modèle</th><th>Envoyé à Gemini</th><th>Réponse de Gemini</th><th>Tokens (prompt/réponse/total)</th><th>ms</th></tr></thead><tbody id="gt"></tbody></table></section>
 </main>
 <script>
 const $=id=>document.getElementById(id);
-const esc=s=>{const d=document.createElement('div');d.textContent=s??'';return d.innerHTML};
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=t=>new Date(t*1000).toLocaleString('fr-FR');
 const fail=t=>{$('msg').textContent+=($('msg').textContent?' — ':'')+t};
 async function api(p,m='GET',b){
@@ -94,5 +105,20 @@ function perms(){$('sv').innerHTML=services.length?'':'<p class="mut">Créez un 
 async function logs(){const l=await api(`/api/admin/logs?username=${encodeURIComponent($('lu').value)}&status=${encodeURIComponent($('ls').value)}`).catch(()=>[]);
   $('lt').innerHTML=l.map(r=>`<tr><td>${fmt(r.created_at)}</td><td>${esc(r.username)}</td><td>${esc(r.question)}</td>
   <td class="sql">${esc(r.sql)}</td><td class="${r.status==='ok'?'':'ko'}">${esc(r.status)}</td><td>${r.row_count??''}</td><td>${r.duration_ms??''}</td></tr>`).join('')}
-$('lr').onclick=logs;$('out').onclick=async e=>{e.preventDefault();await api('/api/logout','POST');location.href='/'};load();
+$('lr').onclick=logs;
+async function gstats(){const s=await api('/api/admin/gemini-logs/stats').catch(()=>null);if(!s)return;
+  const fmt=n=>n.toLocaleString('fr-FR');
+  $('gstat').innerHTML=[['jour','Aujourd\'hui'],['semaine','7 derniers jours'],['total','Depuis le début']]
+    .map(([k,l])=>`<div><b>${fmt(s[k].tokens)}</b><span>tokens · ${fmt(s[k].echanges)} échange(s) — ${esc(l)}</span></div>`).join('')}
+async function glogs(){const l=await api(`/api/admin/gemini-logs?username=${encodeURIComponent($('gu').value)}&kind=${encodeURIComponent($('gk').value)}`).catch(()=>[]);
+  $('gt').innerHTML=l.map(r=>{const tk=r.total_tokens!=null?`${r.prompt_tokens??'—'} / ${r.response_tokens??'—'} / ${r.total_tokens}`:'—';
+    const contenu=r.erreur?`<span class="ko2">Erreur : ${esc(r.erreur)}</span>`:esc(r.reponse||'');
+    return `<tr><td>${fmt(r.created_at)}</td><td>${esc(r.username)}</td><td>${r.kind==='sql'?'SQL':'Texte'}</td><td>${esc(r.model||'')}</td>
+    <td><button class="gtog">Voir le prompt ▾</button><div class="gdet" hidden>${esc((r.system_instruction?'[Instruction système]\n'+r.system_instruction+'\n\n':'')+r.prompt)}</div></td>
+    <td><button class="gtog">Voir la réponse ▾</button><div class="gdet" hidden>${contenu}</div></td>
+    <td class="tk">${tk}</td><td>${r.duration_ms??''}</td></tr>`}).join('');
+  $('gt').querySelectorAll('.gtog').forEach(b=>b.onclick=()=>{const d=b.nextElementSibling;d.hidden=!d.hidden;b.textContent=b.textContent.replace(/[▾▴]/,d.hidden?'▾':'▴')})}
+$('gr').onclick=()=>{gstats();glogs()};
+document.querySelector('[data-t="g"]').addEventListener('click',()=>{gstats();glogs()},{once:true});
+$('out').onclick=async e=>{e.preventDefault();await api('/api/logout','POST');location.href='/'};load();
 </script></body></html>

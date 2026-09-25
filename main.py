@@ -221,13 +221,21 @@ def _conv(conv_id, u):
 
 @app.get("/api/conversations")
 def lister_conv(u=Depends(user_dep)):
-    convs = S.q("SELECT id, titre FROM conversations WHERE user_id=? ORDER BY created_at DESC", (u["id"],))
-    for c in convs:
-        c["messages"] = S.q("SELECT id, question, reponse, sql AS sql_genere, resultats, erreur "
-                            "FROM messages WHERE conv_id=? ORDER BY id", (c["id"],))
-        for m in c["messages"]:
-            m["resultats"] = json.loads(m["resultats"]) if m["resultats"] else None
-    return convs
+    """Liste légère (sans les messages) : ils se chargent à l'ouverture d'une conversation.
+    `questions` sert uniquement à la recherche dans la barre latérale."""
+    return S.q("""SELECT c.id, c.titre,
+                         (SELECT group_concat(question, char(10)) FROM messages WHERE conv_id=c.id) AS questions
+                  FROM conversations c WHERE c.user_id=? ORDER BY c.created_at DESC""", (u["id"],))
+
+
+@app.get("/api/conversations/{cid}")
+def lire_conv(cid: str, u=Depends(user_dep)):
+    _conv(cid, u)
+    msgs = S.q("SELECT id, question, reponse, sql AS sql_genere, resultats, erreur "
+               "FROM messages WHERE conv_id=? ORDER BY id", (cid,))
+    for m in msgs:
+        m["resultats"] = json.loads(m["resultats"]) if m["resultats"] else None
+    return {"messages": msgs}
 
 
 class Titre(BaseModel):
@@ -264,6 +272,10 @@ class Question(BaseModel):
     veut_tableau: bool = True
 
 
+_sql_cache: dict = {}          # (question normalisée, schéma) -> (horodatage, sql)
+SQL_CACHE_TTL, SQL_CACHE_MAX = 600, 200
+
+
 @app.post("/api/ask")
 def ask(p: Question, u=Depends(user_dep)):
     question = p.question.strip()
@@ -292,10 +304,18 @@ def ask(p: Question, u=Depends(user_dep)):
                     json.dumps(kw["resultats"], default=str, ensure_ascii=False) if kw.get("resultats") else None,
                     kw.get("erreur"), time.time()), write=True)
 
-    try:
-        sql = generer_sql(question, schema, hist)
-    except Exception as e:
-        raise HTTPException(502, f"Erreur Gemini (génération SQL): {e}")
+    # Même question, mêmes droits, sans contexte de conversation : on réutilise la SQL déjà générée
+    # (la requête est de toute façon ré-exécutée, donc les données restent à jour).
+    cle = (" ".join(question.lower().split()), hash(schema))
+    en_cache = None if hist else _sql_cache.get(cle)
+    if en_cache and time.time() - en_cache[0] < SQL_CACHE_TTL:
+        sql = en_cache[1]
+    else:
+        journal = lambda **kw: S.log_gemini(u, conv["id"], **kw)
+        try:
+            sql = generer_sql(question, schema, hist, log=journal)
+        except Exception as e:
+            raise HTTPException(502, f"Erreur Gemini (génération SQL): {e}")
 
     t0 = time.time()
     try:
@@ -309,13 +329,19 @@ def ask(p: Question, u=Depends(user_dep)):
         enregistrer(sql=sql, erreur=str(e))
         raise HTTPException(400, f"Requête invalide: {e}")
     S.log_query(u, question, sql, "ok", res["row_count"], int((time.time() - t0) * 1000))
+    if not hist:
+        if len(_sql_cache) >= SQL_CACHE_MAX:
+            _sql_cache.clear()
+        _sql_cache[cle] = (time.time(), sql)
 
-    rep = ""
+    # Le texte de réponse (2e appel Gemini) n'est plus attendu ici : le tableau part tout de suite,
+    # et le texte est généré ensuite par POST /api/ask/{id}/texte.
+    rep, attente = "", False
     if p.veut_reponse:
-        try:
-            rep = formuler_reponse(question, res)
-        except Exception as e:
-            raise HTTPException(502, f"Erreur Gemini (formulation): {e}")
+        if res["row_count"] == 0:
+            rep = "Aucun résultat."
+        else:
+            attente = True
     if not (p.veut_tableau or p.veut_reponse):
         p.veut_tableau = True                      # toujours afficher au moins un des deux
     if not p.veut_tableau:
@@ -325,7 +351,26 @@ def ask(p: Question, u=Depends(user_dep)):
         if g:
             res["graphique"] = g
     mid = enregistrer(reponse=rep, sql=sql, resultats=res)
-    return {"id": mid, "reponse": rep, "sql_genere": sql, "resultats": res}
+    return {"id": mid, "reponse": rep, "sql_genere": sql, "resultats": res, "texte_en_attente": attente}
+
+
+@app.post("/api/ask/{mid}/texte")
+def ask_texte(mid: int, u=Depends(user_dep)):
+    """Génère (une seule fois) la phrase de réponse d'un message déjà enregistré."""
+    m = S.q("""SELECT m.question, m.reponse, m.resultats FROM messages m
+               JOIN conversations c ON c.id=m.conv_id WHERE m.id=? AND c.user_id=?""", (mid, u["id"]), one=True)
+    if not m or not m["resultats"]:
+        raise HTTPException(404, "Message introuvable")
+    if m["reponse"]:
+        return {"reponse": m["reponse"]}
+    conv_id = S.q("SELECT conv_id FROM messages WHERE id=?", (mid,), one=True)["conv_id"]
+    journal = lambda **kw: S.log_gemini(u, conv_id, **kw)
+    try:
+        rep = formuler_reponse(m["question"], json.loads(m["resultats"]), log=journal)
+    except Exception as e:
+        raise HTTPException(502, f"Erreur Gemini (formulation): {e}")
+    S.q("UPDATE messages SET reponse=? WHERE id=?", (rep, mid), write=True)
+    return {"reponse": rep}
 
 
 # --- Export d'un tableau ---------------------------------------------------------------------
@@ -509,3 +554,23 @@ def admin_logs(username: str = "", status: str = "", limit: int = 200, _=Depends
     return S.q("""SELECT id, username, question, sql, status, row_count, duration_ms, created_at
                   FROM query_log WHERE (?='' OR username=?) AND (?='' OR status=?)
                   ORDER BY id DESC LIMIT ?""", (username, username, status, status, min(limit, 1000)))
+
+
+@app.get("/api/admin/gemini-logs")
+def admin_gemini_logs(username: str = "", kind: str = "", limit: int = 200, _=Depends(admin_dep)):
+    """Journal des échanges avec Gemini : prompt envoyé, réponse brute et tokens utilisés."""
+    return S.q("""SELECT id, username, conv_id, kind, model, system_instruction, prompt, reponse,
+                         prompt_tokens, response_tokens, total_tokens, duration_ms, erreur, created_at
+                  FROM gemini_log WHERE (?='' OR username=?) AND (?='' OR kind=?)
+                  ORDER BY id DESC LIMIT ?""", (username, username, kind, kind, min(limit, 1000)))
+
+
+@app.get("/api/admin/gemini-logs/stats")
+def admin_gemini_stats(_=Depends(admin_dep)):
+    """Totaux de tokens (aujourd'hui / 7 derniers jours / total) pour la vue d'ensemble de l'onglet."""
+    jour, semaine = time.time() - 86400, time.time() - 7 * 86400
+    def total(depuis):
+        r = S.q("SELECT COUNT(*) n, COALESCE(SUM(total_tokens),0) t FROM gemini_log WHERE created_at>=?",
+                (depuis,), one=True)
+        return {"echanges": r["n"], "tokens": r["t"]}
+    return {"jour": total(jour), "semaine": total(semaine), "total": total(0)}

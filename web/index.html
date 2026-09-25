@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Assistant Boutique</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
 :root{--acc:#4f46e5;--bd:#e5e5e8;--mut:#7a7a85;--side:#1e1e2e}
 *{box-sizing:border-box}body{margin:0;font:15px -apple-system,"Segoe UI",Roboto,sans-serif;color:#1f1f28;background:#f7f7f8;display:flex;height:100vh;overflow:hidden}
@@ -51,7 +50,7 @@ th,td{border:1px solid var(--bd);padding:6px 10px;text-align:left}th{background:
 <button class="btn">Envoyer</button></form></div></div>
 <script>
 const $=id=>document.getElementById(id);
-const esc=s=>{const d=document.createElement('div');d.textContent=s??'';return d.innerHTML};
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let convs=[],cur=null;
 async function api(path,method='GET',body){
   const r=await fetch(path,{method,headers:{'Content-Type':'application/json','X-Requested-With':'fetch'},body:body&&JSON.stringify(body)});
@@ -62,38 +61,45 @@ async function api(path,method='GET',body){
 async function start(){
   try{const me=await api('/api/me');
     $('me').textContent=me.username+(me.service?' · '+me.service:'');$('adm').hidden=me.role!=='admin';
-    convs=await api('/api/conversations');cur=convs[0]?.id||null;hist();thread()}catch{}}
+    convs=await api('/api/conversations');await ouvrir(convs[0]?.id||null)}catch{}}
+// Les conversations arrivent sans leurs messages (liste légère) : on les charge à l'ouverture.
+async function charger(c){if(c.messages)return;const d=await api('/api/conversations/'+c.id);c.messages=d.messages}
+async function ouvrir(id){cur=id;hist();const c=conv();
+  if(c&&!c.messages){$('thread').innerHTML='<div class="empty">Chargement…</div>';try{await charger(c)}catch{}}
+  if(cur===id)thread()}
 $('out').onclick=async()=>{await api('/api/logout','POST');location.href='/'};
 $('pw').onclick=async()=>{const a=prompt('Mot de passe actuel :');if(!a)return;const n=prompt('Nouveau (10 caractères min.) :');if(!n)return;
   try{await api('/api/password','POST',{ancien:a,nouveau:n});alert('Mot de passe modifié')}catch(x){alert(x.message)}};
 const conv=()=>convs.find(c=>c.id===cur);
 function hist(){$('hist').innerHTML='';const t=$('s').value.trim().toLowerCase();let n=0;convs.forEach(c=>{
   let snip='';
-  if(t){const has=x=>(x||'').toLowerCase().includes(t);const hit=c.messages.find(m=>has(m.question)||has(m.reponse));
+  if(t){const has=x=>(x||'').toLowerCase().includes(t);const hit=(c.questions||'').split('\n').find(has);
     if(!hit&&!has(c.titre))return;
-    if(hit)snip=`<small style="display:block;opacity:.6;overflow:hidden;text-overflow:ellipsis">${esc(hit.question)}</small>`}
+    if(hit)snip=`<small style="display:block;opacity:.6;overflow:hidden;text-overflow:ellipsis">${esc(hit)}</small>`}
   n++;const d=document.createElement('div');d.className='h'+(c.id===cur?' a':'');
   d.innerHTML=`<span>${esc(c.titre||'Nouvelle conversation')}${snip}</span><b class="ic" title="Renommer">✎</b><b class="ic del" title="Supprimer">✕</b>`;
-  d.querySelector('span').onclick=()=>{cur=c.id;hist();thread()};
+  d.querySelector('span').onclick=()=>ouvrir(c.id);
   const [rn,del]=d.querySelectorAll('b');
   rn.onclick=async()=>{const t=prompt('Nouveau nom :',c.titre||'');if(t&&t.trim()){await api('/api/conversations/'+c.id,'PATCH',{titre:t});c.titre=t.trim();hist()}};
   del.onclick=async()=>{if(!confirm('Supprimer cette conversation ?'))return;await api('/api/conversations/'+c.id,'DELETE');
-    convs=convs.filter(x=>x.id!==c.id);if(cur===c.id)cur=convs[0]?.id||null;hist();thread()};
+    convs=convs.filter(x=>x.id!==c.id);if(cur===c.id)await ouvrir(convs[0]?.id||null);else hist()};
   $('hist').appendChild(d)});if(t&&!n)$('hist').innerHTML='<div class="h" style="cursor:default">Aucun résultat</div>'}
-$('s').oninput=hist;
+let tRech;$('s').oninput=()=>{clearTimeout(tRech);tRech=setTimeout(hist,200)};
 $('cr').onchange=$('ct').onchange=e=>{if(!$('cr').checked&&!$('ct').checked)(e.target===$('cr')?$('ct'):$('cr')).checked=true};
 function thread(){const t=$('thread');t.innerHTML='';const c=conv();
-  if(!c||!c.messages.length){t.innerHTML='<div class="empty">Posez une question sur vos données.</div>';return}
+  if(!c||!(c.messages||[]).length){t.innerHTML='<div class="empty">Posez une question sur vos données.</div>';return}
   c.messages.forEach(m=>{bubble('u',esc(m.question));assistant(m)});t.scrollTop=t.scrollHeight}
 function bubble(cls,html){const d=document.createElement('div');d.className='m '+cls;d.innerHTML=`<div class="bub${cls==='e'?' e':''}">${html}</div>`;
   $('thread').appendChild(d);d.scrollIntoView();return d}
 function assistant(m){
-  if(m.erreur){bubble('a e',esc(m.erreur));if(m.sql_genere){}return}
+  if(m.erreur)return bubble('a e',esc(m.erreur));
   const d=document.createElement('div');d.className='m a';let h='';
   if(m.reponse)h+=`<div class="bub">${esc(m.reponse)}</div>`;
+  else if(m.attente)h+='<div class="bub txt"><i>Rédaction de la réponse…</i></div>';
   const r=m.resultats;
   if(r&&r.rows.length){if(!r.masque)h+='<div class="tw"><table><thead><tr>'+r.columns.map(c=>`<th>${esc(c)}</th>`).join('')+'</tr></thead><tbody>'+
-    r.rows.map(x=>'<tr>'+r.columns.map(c=>`<td>${esc(String(x[c]??''))}</td>`).join('')+'</tr>').join('')+'</tbody></table></div>';
+    r.rows.slice(0,100).map(x=>'<tr>'+r.columns.map(c=>`<td>${esc(String(x[c]??''))}</td>`).join('')+'</tr>').join('')+'</tbody></table></div>';
+    if(!r.masque&&r.rows.length>100)h+='<div class="exp">Affichage limité aux 100 premières lignes sur '+r.rows.length+' — utilisez l\'export pour tout obtenir.</div>';
     if(r.truncated)h+='<div class="exp">Résultat limité à '+r.row_count+' lignes.</div>';
     h+=`<div class="exp">Exporter :<select>${['csv','xlsx','pdf','json','tsv','md'].map(f=>`<option>${f}</option>`).join('')}</select><button>Télécharger</button></div>`}
   if(r&&r.rows.length)h+=builder(r);
@@ -102,7 +108,8 @@ function assistant(m){
   d.innerHTML=h||'<div class="bub"><em>Aucun résultat.</em></div>';
   const b=d.querySelector('.exp button');
   if(b)b.onclick=()=>{location.href=`/api/export/${m.id}?format=${d.querySelector('.exp select').value}`};
-  $('thread').appendChild(d);if(r&&r.graphique)chart(d.querySelector('canvas'),r);if(r&&r.rows.length)wire(d,r)}
+  $('thread').appendChild(d);if(r&&r.graphique)chart(d.querySelector('canvas'),r);if(r&&r.rows.length)wire(d,r);return d}
+function majTexte(node,txt){const b=node&&node.querySelector('.txt');if(b)b.textContent=txt}
 // --- Graphique construit par l'utilisateur à partir du tableau ---
 const numCols=r=>r.columns.filter(c=>r.rows.some(x=>typeof x[c]==='number')&&r.rows.every(x=>x[c]==null||typeof x[c]==='number'));
 function builder(r){const num=numCols(r);if(r.columns.length<2||!num.length)return '';
@@ -122,8 +129,14 @@ function wire(d,r){const gb=d.querySelector('.gb');if(!gb)return;
     out.innerHTML='<div style="width:min(720px,100%);background:#fff;border:1px solid var(--bd);border-radius:8px;padding:12px"><canvas></canvas></div>';
     chart(out.querySelector('canvas'),r,{type,x,y:pie?ys.slice(0,1):ys,titre:(pie?ys[0]:ys.join(', '))+' par '+x})}}
 const PAL=['#ff2200','#ff97d0','#0a0a0a','#ff7a59','#7a7a7a','#ffb199','#c2185b','#444444'];
-function chart(cv,r,g){g=g||r.graphique;
-  if(typeof Chart==='undefined'){cv.parentElement.textContent='Graphique indisponible (bibliothèque Chart.js non chargée).';return}
+// Chart.js est chargé à la demande (première fois qu'un graphique est affiché), pas à chaque page.
+let chartLib=null;
+function loadChart(){if(typeof Chart!=='undefined')return Promise.resolve();
+  return chartLib||(chartLib=new Promise((ok,ko)=>{const sc=document.createElement('script');
+    sc.src='https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';sc.onload=ok;
+    sc.onerror=()=>{chartLib=null;ko()};document.head.appendChild(sc)}))}
+async function chart(cv,r,g){g=g||r.graphique;
+  try{await loadChart()}catch{cv.parentElement.textContent='Graphique indisponible (bibliothèque Chart.js non chargée).';return}
   const rows=r.rows.slice(0,100),pie=g.type==='pie'||g.type==='doughnut';
   new Chart(cv,{type:g.type,data:{labels:rows.map(x=>String(x[g.x]??'')),datasets:g.y.map((c,i)=>({label:c,data:rows.map(x=>Number(x[c])),
     backgroundColor:pie?PAL:PAL[i%8],borderColor:pie?'#fff':PAL[i%8],tension:.25}))},
@@ -131,13 +144,19 @@ function chart(cv,r,g){g=g||r.graphique;
 $('new').onclick=async()=>{const c=await api('/api/conversations','POST');convs.unshift(c);cur=c.id;hist();thread();$('q').focus()};
 $('f').onsubmit=async e=>{e.preventDefault();const q=$('q').value.trim();if(!q)return;
   if(!conv()){const c=await api('/api/conversations','POST');convs.unshift(c);cur=c.id}
-  const c=conv();if(!c.messages.length)$('thread').innerHTML='';
+  const c=conv();if(!c.messages){try{await charger(c)}catch{c.messages=[]}}
+  if(!c.messages.length)$('thread').innerHTML='';
   bubble('u',esc(q));$('q').value='';$('q').disabled=true;const w=bubble('a','<i>Recherche en cours…</i>');
   const m={question:q};
   try{const r=await api('/api/ask','POST',{conv_id:c.id,question:q,veut_reponse:$('cr').checked,veut_tableau:$('ct').checked});
-    Object.assign(m,{id:r.id,reponse:r.reponse,sql_genere:r.sql_genere,resultats:r.resultats})}
+    Object.assign(m,{id:r.id,reponse:r.reponse,sql_genere:r.sql_genere,resultats:r.resultats,attente:!!r.texte_en_attente})}
   catch(x){m.erreur=x.message}
-  w.remove();assistant(m);c.messages.push(m);if(!c.titre)c.titre=q.slice(0,80);hist();
-  $('q').disabled=false;$('q').focus()};
+  w.remove();const node=assistant(m);c.messages.push(m);if(!c.titre)c.titre=q.slice(0,80);
+  c.questions=(c.questions?c.questions+'\n':'')+q;hist();
+  $('q').disabled=false;$('q').focus();
+  // Le tableau est déjà affiché : la phrase de réponse arrive ensuite, sans bloquer l'utilisateur.
+  if(m.attente)api('/api/ask/'+m.id+'/texte','POST')
+    .then(t=>{m.reponse=t.reponse;m.attente=false;majTexte(node,t.reponse)})
+    .catch(x=>{m.attente=false;majTexte(node,'(Réponse texte indisponible : '+x.message+')')})};
 start();
 </script></body></html>

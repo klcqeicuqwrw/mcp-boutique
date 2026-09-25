@@ -138,7 +138,37 @@ def _appeler_gemini_avec_retry(contents: str, config: types.GenerateContentConfi
     raise derniere_erreur
 
 
-def generer_sql(question: str, schema: str, historique: list) -> str:
+def _extraire_tokens(response):
+    """Nombre de tokens consommés, si le SDK les renvoie (usage_metadata)."""
+    u = getattr(response, "usage_metadata", None)
+    if not u:
+        return None, None, None
+    return (getattr(u, "prompt_token_count", None),
+            getattr(u, "candidates_token_count", None),
+            getattr(u, "total_token_count", None))
+
+
+def _appeler_et_journaliser(kind, prompt, config, log):
+    """Appelle Gemini puis, si un journal (`log`) est fourni par l'appelant, y enregistre
+    l'échange complet : prompt envoyé, instruction système, réponse brute et tokens utilisés."""
+    t0 = time.time()
+    try:
+        response = _appeler_gemini_avec_retry(prompt, config)
+    except Exception as error:
+        if log:
+            log(kind=kind, model=GEMINI_MODEL, system_instruction=config.system_instruction, prompt=prompt,
+                reponse=None, prompt_tokens=None, response_tokens=None, total_tokens=None,
+                duration_ms=int((time.time() - t0) * 1000), erreur=str(error))
+        raise
+    if log:
+        pt, rt, tt = _extraire_tokens(response)
+        log(kind=kind, model=GEMINI_MODEL, system_instruction=config.system_instruction, prompt=prompt,
+            reponse=response.text, prompt_tokens=pt, response_tokens=rt, total_tokens=tt,
+            duration_ms=int((time.time() - t0) * 1000), erreur=None)
+    return response
+
+
+def generer_sql(question: str, schema: str, historique: list, log=None) -> str:
     contexte_str = ""
     if historique:
         messages_recents = historique[-6:] # Garder les 3 derniers échanges max
@@ -154,8 +184,8 @@ def generer_sql(question: str, schema: str, historique: list) -> str:
         "qui répond à cette question, adaptée exactement à ce schéma. "
         "Ne mets aucun point-virgule à la fin."
     )
-    response = _appeler_gemini_avec_retry(
-        prompt,
+    response = _appeler_et_journaliser(
+        "sql", prompt,
         types.GenerateContentConfig(
             temperature=0,
             system_instruction=(
@@ -164,15 +194,27 @@ def generer_sql(question: str, schema: str, historique: list) -> str:
             ),
             response_mime_type="application/json",
         ),
+        log,
     )
     payload = json.loads(response.text)
     return payload["sql"]
 
 
-def formuler_reponse(question: str, resultats: dict) -> str:
+def formuler_reponse(question: str, resultats: dict, log=None) -> str:
+    if resultats.get("row_count", 0) == 0:
+        return "Aucun résultat."
+    # Aperçu seulement : le modèle ne doit pas lister les données (elles sont dans le tableau),
+    # inutile donc de lui envoyer jusqu'à 500 lignes (prompt plus court = réponse plus rapide).
+    apercu = {
+        "columns": resultats["columns"],
+        "rows": resultats["rows"][:20],
+        "row_count": resultats["row_count"],
+        "truncated": resultats.get("truncated", False),
+    }
     prompt = (
         f"Question de l'utilisateur : {question}\n\n"
-        f"Résultats de la requête SQL (JSON) : {json.dumps(resultats, ensure_ascii=False)}\n\n"
+        f"Résultats de la requête SQL (JSON, aperçu des 20 premières lignes sur {resultats['row_count']}) : "
+        f"{json.dumps(apercu, ensure_ascii=False, default=str)}\n\n"
         "Formule une réponse très courte en français en te basant sur ces résultats. "
         "RÈGLE STRICTE : NE FAIS PAS de liste détaillée des données. "
         "Si le résultat est un chiffre ou une réponse unique (ex: un total, un compte), donne-le directement. "
@@ -180,9 +222,7 @@ def formuler_reponse(question: str, resultats: dict) -> str:
         "(ex: 'Voici les clients correspondants :', 'J'ai trouvé X commandes :') puisque "
         "les données détaillées seront affichées dans un tableau visuel juste en dessous."
     )
-    response = _appeler_gemini_avec_retry(
-        prompt, types.GenerateContentConfig(temperature=0.2)
-    )
+    response = _appeler_et_journaliser("texte", prompt, types.GenerateContentConfig(temperature=0.2), log)
     return response.text
 
 

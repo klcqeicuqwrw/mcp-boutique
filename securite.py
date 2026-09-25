@@ -6,6 +6,9 @@ from pathlib import Path
 APP_DB = Path(os.environ.get("APP_DB_PATH", "app.db")).expanduser().resolve()
 SESSION_TTL = 12 * 3600
 _echecs: dict = {}
+SQL_TIMEOUT = 5          # secondes max par requête générée par l'IA
+SCHEMA_TTL = 60          # durée du cache du schéma (secondes)
+_schema_cache: dict = {}
 BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8000").rstrip("/")
 
 
@@ -52,9 +55,10 @@ def _validate_read_query(query: str) -> str:
 
 def q(sql, args=(), one=False, write=False):
     """Exécute une requête sur la base applicative (comptes, conversations, logs)."""
-    with closing(sqlite3.connect(APP_DB)) as c:
+    with closing(sqlite3.connect(APP_DB, timeout=10)) as c:
         c.row_factory = sqlite3.Row
         c.execute("PRAGMA foreign_keys=ON")
+        c.execute("PRAGMA synchronous=NORMAL")   # avec WAL : commits bien plus rapides
         cur = c.execute(sql, args)
         if write:
             c.commit()
@@ -64,7 +68,8 @@ def q(sql, args=(), one=False, write=False):
 
 
 def init_db():
-    with closing(sqlite3.connect(APP_DB)) as c:
+    with closing(sqlite3.connect(APP_DB, timeout=10)) as c:
+        c.execute("PRAGMA journal_mode=WAL")     # lectures et écritures ne se bloquent plus
         c.executescript("""
         CREATE TABLE IF NOT EXISTS services(id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL);
         CREATE TABLE IF NOT EXISTS permissions(
@@ -86,6 +91,10 @@ def init_db():
             question TEXT, reponse TEXT, sql TEXT, resultats TEXT, erreur TEXT, created_at REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS query_log(id INTEGER PRIMARY KEY, user_id INTEGER, username TEXT,
             question TEXT, sql TEXT, status TEXT, row_count INTEGER, duration_ms INTEGER, created_at REAL);
+        CREATE TABLE IF NOT EXISTS gemini_log(id INTEGER PRIMARY KEY, user_id INTEGER, username TEXT,
+            conv_id TEXT, kind TEXT, model TEXT, system_instruction TEXT, prompt TEXT, reponse TEXT,
+            prompt_tokens INTEGER, response_tokens INTEGER, total_tokens INTEGER,
+            duration_ms INTEGER, erreur TEXT, created_at REAL);
         """)
         # migration : e-mail des comptes + jetons de réinitialisation
         if "email" not in [r[1] for r in c.execute("PRAGMA table_info(users)")]:
@@ -93,13 +102,25 @@ def init_db():
         c.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_email ON users(email)")
         c.execute("CREATE TABLE IF NOT EXISTS resets(token_hash TEXT PRIMARY KEY, "
                   "user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires REAL NOT NULL)")
-        # migration : anciens résultats enregistrés avec des séquences \uXXXX -> texte lisible
-        for mid, res in c.execute(r"SELECT id, resultats FROM messages WHERE resultats LIKE '%\u%'").fetchall():
-            try:
-                c.execute("UPDATE messages SET resultats=? WHERE id=?",
-                          (json.dumps(json.loads(res), ensure_ascii=False, default=str), mid))
-            except ValueError:
-                pass
+        # index : évite les parcours complets (listes, jointures, suppressions en cascade)
+        c.executescript("""
+        CREATE INDEX IF NOT EXISTS ix_messages_conv ON messages(conv_id, id);
+        CREATE INDEX IF NOT EXISTS ix_conv_user ON conversations(user_id, created_at);
+        CREATE INDEX IF NOT EXISTS ix_sessions_user ON sessions(user_id);
+        CREATE INDEX IF NOT EXISTS ix_resets_user ON resets(user_id);
+        CREATE INDEX IF NOT EXISTS ix_log_date ON query_log(created_at);
+        CREATE INDEX IF NOT EXISTS ix_gemini_log_date ON gemini_log(created_at);
+        CREATE INDEX IF NOT EXISTS ix_gemini_log_user ON gemini_log(user_id);
+        """)
+        # migration (une seule fois) : anciens résultats avec des séquences \uXXXX -> texte lisible
+        if c.execute("PRAGMA user_version").fetchone()[0] < 1:
+            for mid, res in c.execute(r"SELECT id, resultats FROM messages WHERE resultats LIKE '%\u%'").fetchall():
+                try:
+                    c.execute("UPDATE messages SET resultats=? WHERE id=?",
+                              (json.dumps(json.loads(res), ensure_ascii=False, default=str), mid))
+                except ValueError:
+                    pass
+            c.execute("PRAGMA user_version=1")
         c.executemany("INSERT OR IGNORE INTO services(name) VALUES(?)",
                       [("Marketing",), ("Finance",), ("RH",), ("DSI",)])
         c.commit()
@@ -257,6 +278,19 @@ def tables_info():
 
 
 def schema_text(allowed):
+    """Schéma filtré selon les droits (mis en cache ~60 s). La clé contient les droits :
+    si l'admin les modifie, un nouveau schéma est calculé automatiquement."""
+    cle = None if allowed is None else tuple(sorted(
+        (t, tuple(sorted(cols)) if cols is not None else None) for t, cols in allowed.items()))
+    hit = _schema_cache.get(cle)
+    if hit and time.time() - hit[0] < SCHEMA_TTL:
+        return hit[1]
+    texte = _schema_text_brut(allowed)
+    _schema_cache[cle] = (time.time(), texte)
+    return texte
+
+
+def _schema_text_brut(allowed):
     """Schéma filtré selon les droits : c'est le seul que voit le modèle IA."""
     lignes = []
     with closing(_connect_read_only()) as c:
@@ -277,6 +311,8 @@ def run_query(user, sql, max_rows=500):
     sql = _validate_read_query(sql)
     with closing(_connect_read_only()) as c:
         c.set_authorizer(_authorizer(allowed_for(user)))
+        deadline = time.time() + SQL_TIMEOUT
+        c.set_progress_handler(lambda: 1 if time.time() > deadline else 0, 100000)  # coupe les requêtes trop longues
         try:
             cur = c.execute(sql)
             cols = [d[0] for d in cur.description or []]
@@ -284,6 +320,8 @@ def run_query(user, sql, max_rows=500):
         except sqlite3.DatabaseError as e:
             if "not authorized" in str(e) or "prohibited" in str(e):
                 raise PermissionError("Accès refusé : cette requête touche des données non autorisées pour votre service.") from e
+            if "interrupted" in str(e):
+                raise RuntimeError(f"Requête trop longue (limite {SQL_TIMEOUT} s) : ajoutez des filtres.") from e
             raise RuntimeError(f"Erreur SQLite : {e}") from e
     trunc = len(rows) > max_rows
     rows = rows[:max_rows]
@@ -295,3 +333,14 @@ def log_query(user, question, sql, status, rows=0, ms=0):
     q("INSERT INTO query_log(user_id,username,question,sql,status,row_count,duration_ms,created_at) "
       "VALUES(?,?,?,?,?,?,?,?)", (user["id"], user["username"], question, sql, status, rows, ms, time.time()),
       write=True)
+
+
+def log_gemini(user, conv_id, kind, model, system_instruction, prompt, reponse=None,
+               prompt_tokens=None, response_tokens=None, total_tokens=None, duration_ms=0, erreur=None):
+    """Journalise un échange avec Gemini (génération SQL ou formulation de réponse),
+    visible dans Administration -> Échanges IA."""
+    q("""INSERT INTO gemini_log(user_id,username,conv_id,kind,model,system_instruction,prompt,reponse,
+                                 prompt_tokens,response_tokens,total_tokens,duration_ms,erreur,created_at)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+      (user["id"], user["username"], conv_id, kind, model, system_instruction, prompt, reponse,
+       prompt_tokens, response_tokens, total_tokens, duration_ms, erreur, time.time()), write=True)
