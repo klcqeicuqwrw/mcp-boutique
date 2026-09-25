@@ -7,7 +7,7 @@
         "${workspaceFolder}\\server.py"
       ],
       "env": {
-        "SQLITE_DB_PATH": "${workspaceFolder}/boutique.db"
+        "SQLITE_DB_PATH": "${workspaceFolder}/bailleur_social.db"
       }
     }
   }

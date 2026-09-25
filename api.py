@@ -33,17 +33,30 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 
 MAX_ROWS = 500
 DATABASE_PATH = Path(
-    os.environ.get("SQLITE_DB_PATH", "boutique.db")
+    os.environ.get("SQLITE_DB_PATH", "bailleur_social.db")
 ).expanduser().resolve()
 
 app = FastAPI(title="API Boutique - Langage naturel vers SQL")
 
+# ---------------------------------------------------------------------------
+# Ce fichier est le cœur du moteur "question -> SQL -> résultats -> réponse".
+# Le flux est simple :
+#   1) on lit le schéma de la base ;
+#   2) on demande à Gemini de générer une requête SQL ;
+#   3) on exécute cette requête en lecture seule ;
+#   4) on reformule les résultats en français pour l'utilisateur.
+# Tout est volontairement séparé en petites fonctions pour que la logique soit
+# facile à lire et à déboguer.
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Accès base de données
 # ---------------------------------------------------------------------------
 
 def _connect_read_only() -> sqlite3.Connection:
+    # On ouvre la base en mode lecture seule pour limiter les dégâts.
+    # Cela empêche la génération SQL de modifier des données par accident.
+    # Le paramètre `?mode=ro` est le garde-fou principal.
     if not DATABASE_PATH.is_file():
         raise FileNotFoundError(
             f"Base SQLite introuvable: {DATABASE_PATH}. "
@@ -55,6 +68,10 @@ def _connect_read_only() -> sqlite3.Connection:
 
 
 def _remove_leading_comments(query: str) -> str:
+    # Quand l'IA nous envoie une requête avec des commentaires au début,
+    # on les enlève pour ne pas fausser la validation finale.
+    # Cette étape est importante parce que SQLite peut accepter des commentaires
+    # multiples au début d'une requête, et nous voulons vérifier le vrai mot-clé.
     remaining = query.lstrip()
     while remaining.startswith("--") or remaining.startswith("/*"):
         if remaining.startswith("--"):
@@ -71,6 +88,9 @@ def _remove_leading_comments(query: str) -> str:
 
 
 def _validate_read_query(query: str) -> str:
+    # On ne veut autoriser que des requêtes de lecture. Cette vérification est
+    # la porte de sécurité principale avant le `execute()` sur SQLite.
+    # Si l'IA ou un utilisateur essaie d'envoyer un UPDATE/DELETE/INSERT, cela est rejeté.
     query = _remove_leading_comments(query.strip())
     if not query:
         raise ValueError("La requête SQL ne peut pas être vide.")
@@ -82,6 +102,9 @@ def _validate_read_query(query: str) -> str:
 
 
 def obtenir_schema() -> str:
+    # Le schéma est la carte de la base de données. Sans lui, le modèle IA ne sait
+    # pas quelles tables existent, quelles colonnes peuvent être interrogées et
+    # quelles relations peuvent être utilisées dans les jointures.
     with closing(_connect_read_only()) as connection:
         objects = connection.execute(
             """
@@ -96,6 +119,9 @@ def obtenir_schema() -> str:
 
 
 def executer_requete_sql(requete: str) -> dict:
+    # C'est la fonction qui exécute réellement la requête SQL générée.
+    # On la valide d'abord, puis on lit les résultats en lot pour éviter de saturer
+    # la mémoire et la réponse du serveur.
     safe_query = _validate_read_query(requete)
     try:
         with closing(_connect_read_only()) as connection:
@@ -122,6 +148,9 @@ def executer_requete_sql(requete: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def _appeler_gemini_avec_retry(contents: str, config: types.GenerateContentConfig, tentatives: int = 3):
+    # L'appel à Gemini peut parfois tomber sur un 429 ou 503 temporaire.
+    # On retente automatiquement quelques fois pour ne pas casser le flux si le service
+    # est légèrement saturé. On ne relance pas en cas d'erreur non temporaire.
     derniere_erreur = None
     for essai in range(tentatives):
         try:
@@ -151,6 +180,10 @@ def _extraire_tokens(response):
 def _appeler_et_journaliser(kind, prompt, config, log):
     """Appelle Gemini puis, si un journal (`log`) est fourni par l'appelant, y enregistre
     l'échange complet : prompt envoyé, instruction système, réponse brute et tokens utilisés."""
+    # Cette fonction centralise l'appel externe. Elle sert à la fois à:
+    # - appeler Gemini sans dupliquer le code à chaque endroit,
+    # - enregistrer les journaux pour l'admin,
+    # - mesurer le temps / les tokens consommés.
     t0 = time.time()
     try:
         response = _appeler_gemini_avec_retry(prompt, config)
@@ -169,9 +202,13 @@ def _appeler_et_journaliser(kind, prompt, config, log):
 
 
 def generer_sql(question: str, schema: str, historique: list, log=None) -> str:
+    # Cette fonction est le "traducteur" : une question en français devient une
+    # requête SQL adaptée au schéma de la boutique.
+    # On n'envoie qu'un historique court pour garder le contexte sans surcharger
+    # le prompt avec trop de texte.
     contexte_str = ""
     if historique:
-        messages_recents = historique[-6:] # Garder les 3 derniers échanges max
+        messages_recents = historique[-6:]  # Garder les derniers échanges, pas toute la conversation
         lignes = [f"{msg.role.capitalize()}: {msg.content}" for msg in messages_recents]
         contexte_str = "Historique de la conversation (pour contexte) :\n" + "\n".join(lignes) + "\n\n"
 
@@ -201,10 +238,11 @@ def generer_sql(question: str, schema: str, historique: list, log=None) -> str:
 
 
 def formuler_reponse(question: str, resultats: dict, log=None) -> str:
+    # Après l'exécution SQL, on reformule les résultats en français.
+    # Ici, on envoie seulement un aperçu des 20 premières lignes pour éviter un
+    # prompt trop volumineux et surtout pour rester lisible pour l'utilisateur.
     if resultats.get("row_count", 0) == 0:
         return "Aucun résultat."
-    # Aperçu seulement : le modèle ne doit pas lister les données (elles sont dans le tableau),
-    # inutile donc de lui envoyer jusqu'à 500 lignes (prompt plus court = réponse plus rapide).
     apercu = {
         "columns": resultats["columns"],
         "rows": resultats["rows"][:20],
@@ -285,7 +323,7 @@ PAGE_HTML = """
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Assistant Boutique</title>
+<title>Assistant Baileur Sociale</title>
 <style>
   :root {
     --bg: #f7f7f8;

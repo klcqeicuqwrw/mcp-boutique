@@ -16,9 +16,18 @@ from api import MessageHistorique, _appeler_gemini_avec_retry, formuler_reponse,
 MOTS_GRAPH = re.compile(r"graph|courbe|histogramme|camembert|diagramme|chart|plot", re.I)
 TYPES_GRAPH = ("bar", "line", "pie", "doughnut")
 
+# ---------------------------------------------------------------------------
+# Ce module est la couche "web + sécurité + orchestration".
+# Il reçoit les requêtes HTTP, vérifie la session, choisit les bons droits,
+# puis appelle le moteur SQL / Gemini et renvoie le résultat dans l'interface.
+# ---------------------------------------------------------------------------
+
 
 def choisir_graphique(question, res):
     """Choisit type de graphique et colonnes ; repli heuristique si l'IA échoue."""
+    # Si la question parle d'un "graphique" ou d'une "courbe", on demande à
+    # Gemini de recommander un bon type de visualisation à partir du résultat SQL.
+    # En cas d'échec, on applique un fallback simple : barre par défaut.
     cols, rows = res["columns"], res["rows"]
     est_num = lambda c: any(isinstance(r.get(c), (int, float)) for r in rows) and \
         all(r.get(c) is None or isinstance(r.get(c), (int, float)) for r in rows)
@@ -53,7 +62,7 @@ def choisir_graphique(question, res):
 
 WEB = Path(__file__).parent / "web"
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"  # mettre 1 derrière HTTPS
-app = FastAPI(title="Assistant Boutique (sécurisé)")
+app = FastAPI(title="Assistant baileur sociale")
 S.init_db()
 app.mount("/static", StaticFiles(directory=WEB / "static"), name="static")
 
@@ -61,6 +70,8 @@ app.mount("/static", StaticFiles(directory=WEB / "static"), name="static")
 # --- Dépendances ----------------------------------------------------------------
 
 def user_dep(request: Request):
+    # Chaque route qui a besoin d'un utilisateur connecté passe par cette fonction.
+    # Si le cookie de session n'est pas valide, on refuse immédiatement.
     u = S.user_from_token(request.cookies.get("session"))
     if not u:
         raise HTTPException(401, "Non authentifié")
@@ -68,6 +79,8 @@ def user_dep(request: Request):
 
 
 def csrf(request: Request):
+    # Protection simple contre les requêtes cross-site.
+    # Les requêtes "fetch" AJAX sont autorisées, les autres doivent être rejetées.
     if request.method not in ("GET", "HEAD") and request.headers.get("x-requested-with") != "fetch":
         raise HTTPException(403, "Requête refusée (CSRF)")
 
@@ -90,6 +103,8 @@ def _user_or_none(request: Request):
 @app.get("/")
 def accueil(request: Request):
     """Non connecté -> connexion ; admin -> /admin ; utilisateur -> /chat."""
+    # On envoie l'utilisateur vers la bonne page selon son role.
+    # C'est le point d'entrée principal de l'application web.
     u = _user_or_none(request)
     if not u:
         return FileResponse(WEB / "login.html", headers={"Cache-Control": "no-store"})
@@ -98,11 +113,13 @@ def accueil(request: Request):
 
 @app.get("/reinit")
 def page_reinit():
+    # Page publique pour réinitialiser le mot de passe après un lien reçu par e-mail.
     return FileResponse(WEB / "reset.html")
 
 
 @app.get("/chat")
 def page_chat(request: Request):
+    # L'interface de conversation standard pour les utilisateurs non administrateurs.
     if not _user_or_none(request):
         return RedirectResponse("/")
     return FileResponse(WEB / "index.html")
@@ -278,6 +295,9 @@ SQL_CACHE_TTL, SQL_CACHE_MAX = 600, 200
 
 @app.post("/api/ask")
 def ask(p: Question, u=Depends(user_dep)):
+    # C'est le point d'entrée principal du chatbot métier.
+    # On vérifie les accès, on demande à Gemini de générer SQL, puis on exécute la
+    # requête selon les permissions du service de l'utilisateur.
     question = p.question.strip()
     if not question:
         raise HTTPException(400, "La question ne peut pas être vide.")

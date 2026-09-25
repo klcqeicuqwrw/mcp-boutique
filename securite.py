@@ -12,15 +12,15 @@ _schema_cache: dict = {}
 BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8000").rstrip("/")
 
 
-# --- Accès en lecture seule à la base métier (boutique.db) --------------------------
-DATABASE_PATH = Path(os.environ.get("SQLITE_DB_PATH", "boutique.db")).expanduser().resolve()
+# --- Accès en lecture seule à la base métier (bailleur_social.db) --------------------------
+DATABASE_PATH = Path(os.environ.get("SQLITE_DB_PATH", "bailleur_social.db")).expanduser().resolve()
 
 
 def _connect_read_only() -> sqlite3.Connection:
     if not DATABASE_PATH.is_file():
         raise FileNotFoundError(
             f"Base SQLite introuvable : {DATABASE_PATH}. Lancez le serveur depuis le dossier contenant "
-            "boutique.db ou définissez SQLITE_DB_PATH.")
+            "bailleur_social.db ou définissez SQLITE_DB_PATH.")
     connection = sqlite3.connect(f"{DATABASE_PATH.as_uri()}?mode=ro", uri=True)
     connection.row_factory = sqlite3.Row
     return connection
@@ -54,7 +54,13 @@ def _validate_read_query(query: str) -> str:
 
 
 def q(sql, args=(), one=False, write=False):
-    """Exécute une requête sur la base applicative (comptes, conversations, logs)."""
+    """Exécute une requête sur la base applicative (comptes, conversations, logs).
+
+    `one=True` : on veut un seul enregistrement.
+    `write=True` : on modifie la base (INSERT/UPDATE/DELETE). Sinon, on fait une lecture.
+    """
+    # On ouvre une connexion SQLite simple, on active les clés étrangères et on
+    # retourne soit la première ligne soit toute la liste selon le besoin.
     with closing(sqlite3.connect(APP_DB, timeout=10)) as c:
         c.row_factory = sqlite3.Row
         c.execute("PRAGMA foreign_keys=ON")
@@ -151,6 +157,11 @@ def creer_utilisateur(username, password, role="user", service_id=None, email=No
 
 def login(username, password):
     """Retourne un jeton de session ou None. Limite à 5 échecs / 5 min par compte."""
+    # Le principe est simple :
+    #   - on vérifie si l'utilisateur existe ;
+    #   - on compare le mot de passe ;
+    #   - si OK, on crée un token de session ;
+    #   - si KO, on compte l'échec pour éviter le brute-force.
     now = time.time()
     tentatives = [t for t in _echecs.get(username, []) if now - t < 300]
     if len(tentatives) >= 5:
@@ -239,7 +250,14 @@ def envoyer_mail(dest, sujet, corps):
 # --- Droits d'accès aux données ------------------------------------------------
 
 def allowed_for(user):
-    """None = accès total (admin) ; sinon {table: set(colonnes) | None}."""
+    """None = accès total (admin) ; sinon {table: set(colonnes) | None}.
+
+    Cette fonction transforme les droits d'un service en un dictionnaire très simple
+    que le moteur SQL peut vérifier. Exemple : {'clients': {'id', 'nom'}}.
+    """
+    # Admin = tout accès autorisé.
+    # Un utilisateur standard ne voit que les tables/colonnes explicitement
+    # attribuées à son service. Cela limite la fuite de données.
     if user["role"] == "admin":
         return None
     if not user["service_id"]:
@@ -280,6 +298,8 @@ def tables_info():
 def schema_text(allowed):
     """Schéma filtré selon les droits (mis en cache ~60 s). La clé contient les droits :
     si l'admin les modifie, un nouveau schéma est calculé automatiquement."""
+    # On met en cache le schéma visible pour un service donné.
+    # Cela évite de recalculer les mêmes métadonnées à chaque question.
     cle = None if allowed is None else tuple(sorted(
         (t, tuple(sorted(cols)) if cols is not None else None) for t, cols in allowed.items()))
     hit = _schema_cache.get(cle)
@@ -308,6 +328,9 @@ def _schema_text_brut(allowed):
 
 
 def run_query(user, sql, max_rows=500):
+    # C'est la dernière étape de sécurité avant d'exécuter la requête IA.
+    # On vérifie que le SQL est bien un SELECT autorisé, puis on applique les droits
+    # du service pour bloquer tout accès non prévu.
     sql = _validate_read_query(sql)
     with closing(_connect_read_only()) as c:
         c.set_authorizer(_authorizer(allowed_for(user)))

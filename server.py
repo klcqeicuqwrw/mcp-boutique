@@ -25,11 +25,15 @@ except ModuleNotFoundError as exc:
         def run_stdio(self) -> None:
             asyncio.run(self.run_stdio_async())
 
-mcp = FastMCP("BoutiqueDatabase")
+mcp = FastMCP("BailleurSocialDatabase")
+
+# Ce fichier expose les fonctions SQLite utiles à un client MCP.
+# L'idée est simple : un agent externe peut demander le schéma de la base et
+# exécuter uniquement des requêtes de lecture, jamais des mises à jour.
 
 MAX_ROWS = 500
 DATABASE_PATH = Path(
-    os.environ.get("SQLITE_DB_PATH", "boutique.db")
+    os.environ.get("SQLITE_DB_PATH", "bailleur_social.db")
 ).expanduser().resolve()
 
 
@@ -38,7 +42,7 @@ def _connect_read_only() -> sqlite3.Connection:
     if not DATABASE_PATH.is_file():
         raise FileNotFoundError(
             f"Base SQLite introuvable: {DATABASE_PATH}. "
-            "Définissez SQLITE_DB_PATH ou créez boutique.db."
+            "Définissez SQLITE_DB_PATH ou créez bailleur_social.db."
         )
 
     connection = sqlite3.connect(
@@ -87,6 +91,8 @@ def dire_bonjour(nom: str) -> str:
 @mcp.tool()
 def obtenir_schema() -> str:
     """Retourne les tables, colonnes et index disponibles dans la base SQLite."""
+    # Le client MCP demande d'abord le schéma pour savoir quelles tables existent
+    # et quelles colonnes sont disponibles avant de poser une question SQL.
     with closing(_connect_read_only()) as connection:
         objects = connection.execute(
             """
@@ -112,6 +118,8 @@ def executer_requete_sql(requete: str) -> str:
     Utilisez cet outil après avoir consulté obtenir_schema. Copilot peut
     traduire une demande en langage naturel en requête SQL adaptée au schéma.
     """
+    # On valide la requête avant de l'exécuter pour empêcher tout SELECT "dangereux"
+    # ou une requête avec plusieurs instructions dans une seule chaîne.
     safe_query = _validate_read_query(requete)
 
     try:
@@ -141,8 +149,9 @@ def executer_requete_sql(requete: str) -> str:
 
 
 if __name__ == "__main__":
-    # MCP_TRANSPORT=stdio (par défaut, pour Claude Desktop en local)
-    # MCP_TRANSPORT=http  (pour une exposition réseau, ex: Copilot Studio)
+    # Le serveur MCP peut être lancé en local via stdio ou exposé via HTTP.
+    # En mode stdio, il est souvent utilisé par un client local (Claude Desktop, Copilot, etc.).
+    # En mode HTTP, il est accessible sur le réseau pour des intégrations externes.
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
 
     if transport == "http":
