@@ -36,6 +36,32 @@ DATABASE_PATH = Path(
     os.environ.get("SQLITE_DB_PATH", "bailleur_social.db")
 ).expanduser().resolve()
 
+DICTIONNAIRE_PATH = Path(
+    os.environ.get("DICTIONNAIRE_PATH", "dictionnaire_donnees_bailleur_social.md")
+).expanduser().resolve()
+
+_dictionnaire_cache: str | None = None
+
+
+def obtenir_dictionnaire() -> str:
+    """Charge (et met en cache) le dictionnaire de données métier, s'il existe.
+
+    Ce fichier contient les explications métier que le schéma SQL brut ne
+    donne pas : valeurs possibles des colonnes, conventions (ex. format
+    AAAAMM), règles de lecture (ex. Solde_client négatif = en faveur du
+    client). On l'injecte dans les prompts Gemini pour que les requêtes
+    générées respectent ces règles.
+    """
+    global _dictionnaire_cache
+    if _dictionnaire_cache is None:
+        _dictionnaire_cache = (
+            DICTIONNAIRE_PATH.read_text(encoding="utf-8")
+            if DICTIONNAIRE_PATH.is_file()
+            else ""
+        )
+    return _dictionnaire_cache
+
+
 app = FastAPI(title="API Boutique - Langage naturel vers SQL")
 
 # ---------------------------------------------------------------------------
@@ -212,13 +238,23 @@ def generer_sql(question: str, schema: str, historique: list, log=None) -> str:
         lignes = [f"{msg.role.capitalize()}: {msg.content}" for msg in messages_recents]
         contexte_str = "Historique de la conversation (pour contexte) :\n" + "\n".join(lignes) + "\n\n"
 
+    dictionnaire = obtenir_dictionnaire()
+    dictionnaire_str = (
+        "Dictionnaire de données (règles métier, valeurs possibles, conventions) :\n"
+        f"{dictionnaire}\n\n"
+        if dictionnaire else ""
+    )
+
     prompt = (
-        "Voici le schéma d'une base SQLite (tables, colonnes, clés étrangères) :\n"
+        "Voici le schéma technique d'une base SQLite (tables, colonnes, clés étrangères) :\n"
         f"{schema}\n\n"
+        f"{dictionnaire_str}"
         f"{contexte_str}"
         f"Question actuelle de l'utilisateur : {question}\n\n"
         "Génère UNE SEULE requête SQL de lecture (SELECT, WITH ou EXPLAIN uniquement) "
-        "qui répond à cette question, adaptée exactement à ce schéma. "
+        "qui répond à cette question, adaptée exactement à ce schéma et en respectant "
+        "strictement les définitions, valeurs autorisées et règles métier données dans "
+        "le dictionnaire de données ci-dessus. "
         "Ne mets aucun point-virgule à la fin."
     )
     response = _appeler_et_journaliser(
@@ -314,7 +350,13 @@ def ask(payload: Question) -> Reponse:
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "database": str(DATABASE_PATH), "model": GEMINI_MODEL}
+    return {
+        "status": "ok",
+        "database": str(DATABASE_PATH),
+        "model": GEMINI_MODEL,
+        "dictionnaire": str(DICTIONNAIRE_PATH),
+        "dictionnaire_charge": bool(obtenir_dictionnaire()),
+    }
 
 
 PAGE_HTML = """
