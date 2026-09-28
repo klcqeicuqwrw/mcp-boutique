@@ -14,13 +14,18 @@ from pydantic import BaseModel
 from google import genai
 from google.genai import types
 
-load_dotenv()  # charge automatiquement les variables depuis le fichier .env
+# Charge les variables d'environnement depuis un fichier .env local
+# (ex: GEMINI_API_KEY, SQLITE_DB_PATH) pour ne pas mettre d'infos sensibles en clair dans le code.
+load_dotenv()  
 
 # ---------------------------------------------------------------------------
-# Configuration
+# Configuration principale
 # ---------------------------------------------------------------------------
 
+# Sélectionne le modèle Gemini à utiliser. On utilise par défaut 'gemini-3.6-flash'.
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
+
+# Récupération de la clé API Google (obligatoire pour faire fonctionner l'IA).
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     raise RuntimeError(
@@ -29,31 +34,38 @@ if not GEMINI_API_KEY:
         "$env:GEMINI_API_KEY=\"ta_cle\""
     )
 
+# Initialisation du client de l'API Google Gemini
 client = genai.Client(api_key=GEMINI_API_KEY)
 
+# Limite le nombre de lignes retournées par la base de données pour éviter
+# de saturer la mémoire (RAM) et ralentir la réponse renvoyée à l'utilisateur.
 MAX_ROWS = 500
+
+# Définition du chemin vers la base de données SQLite. 
+# Path().expanduser().resolve() permet de gérer correctement les chemins (même s'ils sont relatifs).
 DATABASE_PATH = Path(
     os.environ.get("SQLITE_DB_PATH", "bailleur_social.db")
 ).expanduser().resolve()
 
+# Définition du chemin vers le dictionnaire de données (optionnel mais recommandé).
 DICTIONNAIRE_PATH = Path(
     os.environ.get("DICTIONNAIRE_PATH", "dictionnaire_donnees_bailleur_social.md")
 ).expanduser().resolve()
 
+# Variable globale servant de "cache" pour éviter de relire le fichier texte
+# du dictionnaire à chaque fois qu'une question est posée par l'utilisateur.
 _dictionnaire_cache: str | None = None
 
 
 def obtenir_dictionnaire() -> str:
-    """Charge (et met en cache) le dictionnaire de données métier, s'il existe.
-
-    Ce fichier contient les explications métier que le schéma SQL brut ne
-    donne pas : valeurs possibles des colonnes, conventions (ex. format
-    AAAAMM), règles de lecture (ex. Solde_client négatif = en faveur du
-    client). On l'injecte dans les prompts Gemini pour que les requêtes
-    générées respectent ces règles.
+    """
+    Charge (et met en cache) le dictionnaire de données métier, s'il existe.
+    Ce fichier est essentiel pour donner du contexte à l'IA (ex: que signifie
+    la valeur 'PLAI' ? Que veut dire un solde négatif ?).
     """
     global _dictionnaire_cache
     if _dictionnaire_cache is None:
+        # Si le fichier existe, on lit son contenu, sinon on renvoie une chaîne vide
         _dictionnaire_cache = (
             DICTIONNAIRE_PATH.read_text(encoding="utf-8")
             if DICTIONNAIRE_PATH.is_file()
@@ -62,76 +74,76 @@ def obtenir_dictionnaire() -> str:
     return _dictionnaire_cache
 
 
+# Initialisation de l'application Web FastAPI
 app = FastAPI(title="API Boutique - Langage naturel vers SQL")
 
 # ---------------------------------------------------------------------------
-# Ce fichier est le cœur du moteur "question -> SQL -> résultats -> réponse".
-# Le flux est simple :
-#   1) on lit le schéma de la base ;
-#   2) on demande à Gemini de générer une requête SQL ;
-#   3) on exécute cette requête en lecture seule ;
-#   4) on reformule les résultats en français pour l'utilisateur.
-# Tout est volontairement séparé en petites fonctions pour que la logique soit
-# facile à lire et à déboguer.
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
-# Accès base de données
+# Accès Base de Données (Sécurisé)
 # ---------------------------------------------------------------------------
 
 def _connect_read_only() -> sqlite3.Connection:
-    # On ouvre la base en mode lecture seule pour limiter les dégâts.
-    # Cela empêche la génération SQL de modifier des données par accident.
-    # Le paramètre `?mode=ro` est le garde-fou principal.
+    """Ouvre une connexion à la base de données STRICTEMENT en mode lecture."""
     if not DATABASE_PATH.is_file():
         raise FileNotFoundError(
             f"Base SQLite introuvable: {DATABASE_PATH}. "
-            "Définissez SQLITE_DB_PATH ou créez boutique.db."
+            "Définissez SQLITE_DB_PATH ou créez la base."
         )
+    # Le '?mode=ro' (Read-Only) empêche physiquement toute modification de la BDD.
+    # C'est la sécurité principale contre des requêtes destructives (DROP, UPDATE, INSERT...) générées par l'IA.
     connection = sqlite3.connect(f"{DATABASE_PATH.as_uri()}?mode=ro", uri=True)
+    # Permet de récupérer les résultats sous forme de dictionnaire (clés/valeurs)
+    # au lieu de simples tuples (listes de valeurs non-nommées).
     connection.row_factory = sqlite3.Row
     return connection
 
 
 def _remove_leading_comments(query: str) -> str:
-    # Quand l'IA nous envoie une requête avec des commentaires au début,
-    # on les enlève pour ne pas fausser la validation finale.
-    # Cette étape est importante parce que SQLite peut accepter des commentaires
-    # multiples au début d'une requête, et nous voulons vérifier le vrai mot-clé.
+    """
+    Nettoie la requête SQL de tout commentaire au début.
+    C'est nécessaire car SQLite accepte les requêtes commençant par '--' ou '/*',
+    ce qui pourrait fausser notre système de vérification de sécurité (Regex) juste après.
+    """
     remaining = query.lstrip()
     while remaining.startswith("--") or remaining.startswith("/*"):
         if remaining.startswith("--"):
             end = remaining.find("\n")
-            if end == -1:
-                return ""
+            if end == -1: return ""
             remaining = remaining[end + 1 :].lstrip()
             continue
         end = remaining.find("*/", 2)
-        if end == -1:
-            return ""
+        if end == -1: return ""
         remaining = remaining[end + 2 :].lstrip()
     return remaining
 
 
 def _validate_read_query(query: str) -> str:
-    # On ne veut autoriser que des requêtes de lecture. Cette vérification est
-    # la porte de sécurité principale avant le `execute()` sur SQLite.
-    # Si l'IA ou un utilisateur essaie d'envoyer un UPDATE/DELETE/INSERT, cela est rejeté.
+    """
+    Dernier rempart de sécurité avant exécution de la requête.
+    Vérifie qu'il n'y a qu'une seule requête et qu'il s'agit bien d'une lecture.
+    """
     query = _remove_leading_comments(query.strip())
     if not query:
         raise ValueError("La requête SQL ne peut pas être vide.")
+    
+    # Interdit l'enchaînement de multiples requêtes (ex: SELECT * FROM t; DROP TABLE t)
     if ";" in query.rstrip(";"):
         raise ValueError("Une seule requête SQL est autorisée.")
+        
+    # N'autorise strictement que les mots clés de lecture de données ou d'analyse
     if not re.match(r"^(SELECT|WITH|EXPLAIN)\b", query, re.IGNORECASE):
         raise ValueError("Seules les requêtes SELECT, WITH et EXPLAIN sont autorisées.")
+    
     return query.rstrip(";").strip()
 
 
 def obtenir_schema() -> str:
-    # Le schéma est la carte de la base de données. Sans lui, le modèle IA ne sait
-    # pas quelles tables existent, quelles colonnes peuvent être interrogées et
-    # quelles relations peuvent être utilisées dans les jointures.
+    """
+    Extrait automatiquement la structure de la base de données.
+    Sans cela, l'IA ne saurait pas comment s'appellent les tables et les colonnes.
+    """
     with closing(_connect_read_only()) as connection:
+        # On interroge la table spéciale 'sqlite_master' qui contient 
+        # la définition de base (CREATE TABLE...) de tout le schéma de données.
         objects = connection.execute(
             """
             SELECT type, name, sql
@@ -141,22 +153,27 @@ def obtenir_schema() -> str:
             ORDER BY type, name
             """
         ).fetchall()
+    # On convertit les informations extraites en texte (JSON formaté) pour le prompt
     return json.dumps([dict(row) for row in objects], ensure_ascii=False, indent=2)
 
 
 def executer_requete_sql(requete: str) -> dict:
-    # C'est la fonction qui exécute réellement la requête SQL générée.
-    # On la valide d'abord, puis on lit les résultats en lot pour éviter de saturer
-    # la mémoire et la réponse du serveur.
+    """
+    Valide la requête puis l'exécute sur la base de données en mode lecture seule.
+    Retourne les colonnes et les lignes prêtes pour être envoyées à l'API/Frontend.
+    """
     safe_query = _validate_read_query(requete)
     try:
         with closing(_connect_read_only()) as connection:
             cursor = connection.execute(safe_query)
+            # Récupère dynamiquement le nom des colonnes
             columns = [d[0] for d in cursor.description or []]
+            # Récupère les lignes (avec une limite de MAX_ROWS + 1 pour savoir si on dépasse)
             rows = cursor.fetchmany(MAX_ROWS + 1)
     except sqlite3.Error as error:
         raise RuntimeError(f"Erreur SQLite pendant l'exécution: {error}") from error
 
+    # Vérifie si le résultat a été tronqué (si la BDD a retourné plus de lignes que le maximum autorisé)
     truncated = len(rows) > MAX_ROWS
     if truncated:
         rows = rows[:MAX_ROWS]
@@ -170,13 +187,15 @@ def executer_requete_sql(requete: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Appels Gemini
+# Appels à l'IA Gemini
 # ---------------------------------------------------------------------------
 
 def _appeler_gemini_avec_retry(contents: str, config: types.GenerateContentConfig, tentatives: int = 3):
-    # L'appel à Gemini peut parfois tomber sur un 429 ou 503 temporaire.
-    # On retente automatiquement quelques fois pour ne pas casser le flux si le service
-    # est légèrement saturé. On ne relance pas en cas d'erreur non temporaire.
+    """
+    Envoie la demande à l'API Gemini. 
+    Intègre une gestion d'erreurs (Retry) : si le service est saturé (erreur 429 ou 503),
+    la fonction attend quelques secondes et réessaie automatiquement au lieu de planter.
+    """
     derniere_erreur = None
     for essai in range(tentatives):
         try:
@@ -186,15 +205,17 @@ def _appeler_gemini_avec_retry(contents: str, config: types.GenerateContentConfi
         except Exception as error:
             derniere_erreur = error
             message = str(error)
+            # Si erreur de surcharge temporaire des serveurs de Google, on patiente
             if "503" in message or "429" in message or "UNAVAILABLE" in message:
                 time.sleep(1.5 * (essai + 1))
                 continue
+            # Si c'est une autre erreur (ex: clé API invalide), on la soulève tout de suite
             raise
     raise derniere_erreur
 
 
 def _extraire_tokens(response):
-    """Nombre de tokens consommés, si le SDK les renvoie (usage_metadata)."""
+    """Fonction utilitaire pour extraire la consommation de tokens (coût API) depuis la réponse de Google."""
     u = getattr(response, "usage_metadata", None)
     if not u:
         return None, None, None
@@ -204,12 +225,10 @@ def _extraire_tokens(response):
 
 
 def _appeler_et_journaliser(kind, prompt, config, log):
-    """Appelle Gemini puis, si un journal (`log`) est fourni par l'appelant, y enregistre
-    l'échange complet : prompt envoyé, instruction système, réponse brute et tokens utilisés."""
-    # Cette fonction centralise l'appel externe. Elle sert à la fois à:
-    # - appeler Gemini sans dupliquer le code à chaque endroit,
-    # - enregistrer les journaux pour l'admin,
-    # - mesurer le temps / les tokens consommés.
+    """
+    Enveloppe la fonction d'appel à Gemini pour centraliser le code
+    et pouvoir optionnellement enregistrer (logger) l'échange : temps de réponse, tokens, erreurs...
+    """
     t0 = time.time()
     try:
         response = _appeler_gemini_avec_retry(prompt, config)
@@ -219,22 +238,26 @@ def _appeler_et_journaliser(kind, prompt, config, log):
                 reponse=None, prompt_tokens=None, response_tokens=None, total_tokens=None,
                 duration_ms=int((time.time() - t0) * 1000), erreur=str(error))
         raise
+    
     if log:
         pt, rt, tt = _extraire_tokens(response)
         log(kind=kind, model=GEMINI_MODEL, system_instruction=config.system_instruction, prompt=prompt,
             reponse=response.text, prompt_tokens=pt, response_tokens=rt, total_tokens=tt,
             duration_ms=int((time.time() - t0) * 1000), erreur=None)
+    
     return response
 
 
 def generer_sql(question: str, schema: str, historique: list, log=None) -> str:
-    # Cette fonction est le "traducteur" : une question en français devient une
-    # requête SQL adaptée au schéma de la boutique.
-    # On n'envoie qu'un historique court pour garder le contexte sans surcharger
-    # le prompt avec trop de texte.
+    """
+    LE TRADUCTEUR : Demande à Gemini de convertir la question en Français
+    vers une requête SQL valide et sécurisée.
+    """
     contexte_str = ""
+    # On fournit les 6 derniers messages échangés pour que l'IA comprenne les
+    # questions avec du contexte (ex: "Combien j'ai de clients ?", puis "Donne moi juste ceux en France")
     if historique:
-        messages_recents = historique[-6:]  # Garder les derniers échanges, pas toute la conversation
+        messages_recents = historique[-6:]
         lignes = [f"{msg.role.capitalize()}: {msg.content}" for msg in messages_recents]
         contexte_str = "Historique de la conversation (pour contexte) :\n" + "\n".join(lignes) + "\n\n"
 
@@ -245,6 +268,7 @@ def generer_sql(question: str, schema: str, historique: list, log=None) -> str:
         if dictionnaire else ""
     )
 
+    # Construction du prompt : La commande envoyée à l'IA
     prompt = (
         "Voici le schéma technique d'une base SQLite (tables, colonnes, clés étrangères) :\n"
         f"{schema}\n\n"
@@ -257,6 +281,10 @@ def generer_sql(question: str, schema: str, historique: list, log=None) -> str:
         "le dictionnaire de données ci-dessus. "
         "Ne mets aucun point-virgule à la fin."
     )
+    
+    # Appel à Gemini avec des contraintes strictes :
+    # - Temperature=0 : on veut la réponse la plus logique et mathématique possible (pas d'hallucination)
+    # - response_mime_type="application/json" : force le modèle à retourner la requête dans un format facile à lire
     response = _appeler_et_journaliser(
         "sql", prompt,
         types.GenerateContentConfig(
@@ -269,22 +297,28 @@ def generer_sql(question: str, schema: str, historique: list, log=None) -> str:
         ),
         log,
     )
+    # Extraction de la requête de l'objet JSON retourné par l'IA
     payload = json.loads(response.text)
     return payload["sql"]
 
 
 def formuler_reponse(question: str, resultats: dict, log=None) -> str:
-    # Après l'exécution SQL, on reformule les résultats en français.
-    # Ici, on envoie seulement un aperçu des 20 premières lignes pour éviter un
-    # prompt trop volumineux et surtout pour rester lisible pour l'utilisateur.
+    """
+    LE RÉDACTEUR : Prend les résultats bruts obtenus de la base de données 
+    et demande à l'IA de rédiger une petite phrase d'introduction conviviale.
+    """
     if resultats.get("row_count", 0) == 0:
         return "Aucun résultat."
+        
+    # Pour ne pas exploser la taille du prompt (et les coûts d'API), on n'envoie 
+    # à l'IA qu'un échantillon des 20 premières lignes pour qu'elle comprenne le résultat.
     apercu = {
         "columns": resultats["columns"],
         "rows": resultats["rows"][:20],
         "row_count": resultats["row_count"],
         "truncated": resultats.get("truncated", False),
     }
+    
     prompt = (
         f"Question de l'utilisateur : {question}\n\n"
         f"Résultats de la requête SQL (JSON, aperçu des 20 premières lignes sur {resultats['row_count']}) : "
@@ -296,14 +330,18 @@ def formuler_reponse(question: str, resultats: dict, log=None) -> str:
         "(ex: 'Voici les clients correspondants :', 'J'ai trouvé X commandes :') puisque "
         "les données détaillées seront affichées dans un tableau visuel juste en dessous."
     )
+    
+    # Température à 0.2 : on autorise une toute petite variation de vocabulaire
     response = _appeler_et_journaliser("texte", prompt, types.GenerateContentConfig(temperature=0.2), log)
     return response.text
 
 
 # ---------------------------------------------------------------------------
-# API Modèles & Routes
+# API Modèles & Routes (Points d'entrée pour le Frontend)
 # ---------------------------------------------------------------------------
 
+# Les modèles Pydantic servent à valider strictement le format des données
+# que le frontend (la page web) envoie et s'attend à recevoir.
 class MessageHistorique(BaseModel):
     role: str
     content: str
@@ -322,34 +360,42 @@ class Reponse(BaseModel):
 
 @app.post("/ask", response_model=Reponse)
 def ask(payload: Question) -> Reponse:
+    """
+    ROUTE PRINCIPALE : C'est ici qu'arrive la question posée par l'utilisateur
+    depuis l'interface graphique.
+    """
     if not payload.question.strip():
         raise HTTPException(status_code=400, detail="La question ne peut pas être vide.")
 
     schema = obtenir_schema()
 
+    # Étape 1 : Obtenir la requête SQL depuis Gemini
     try:
         sql = generer_sql(payload.question, schema, payload.historique)
     except Exception as error:
         raise HTTPException(status_code=502, detail=f"Erreur Gemini (génération SQL): {error}") from error
 
+    # Étape 2 : Exécuter la requête sur la base SQLite de façon sécurisée
     try:
         resultats = executer_requete_sql(sql)
     except (ValueError, RuntimeError) as error:
         raise HTTPException(status_code=400, detail=f"Requête invalide: {error}") from error
 
     reponse_nl = ""
-    # On génère la réponse textuelle uniquement si l'utilisateur l'a demandé
+    # Étape 3 : Demander à Gemini de faire une jolie phrase d'introduction (si demandé)
     if payload.veut_reponse:
         try:
             reponse_nl = formuler_reponse(payload.question, resultats)
         except Exception as error:
             raise HTTPException(status_code=502, detail=f"Erreur Gemini (formulation): {error}") from error
 
+    # On renvoie la réponse formatée : le texte IA, la requête brute, et les données extraites
     return Reponse(reponse=reponse_nl, sql_genere=sql, resultats=resultats)
 
 
 @app.get("/health")
 def health() -> dict:
+    """Route de diagnostic pour s'assurer que l'API est démarrée et voit la BDD."""
     return {
         "status": "ok",
         "database": str(DATABASE_PATH),
@@ -359,6 +405,11 @@ def health() -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Code de l'Interface Graphique (HTML / JS / CSS)
+# ---------------------------------------------------------------------------
+# Pour simplifier le déploiement, tout le frontend est encapsulé dans cette variable
+# texte. C'est le code qui s'affiche quand l'utilisateur se rend sur http://localhost:8000/
 PAGE_HTML = """
 <!DOCTYPE html>
 <html lang="fr">
@@ -367,6 +418,7 @@ PAGE_HTML = """
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Assistant Baileur Sociale</title>
 <style>
+  /* --- Variables globales de design (Couleurs, Polices) --- */
   :root {
     --bg: #f7f7f8;
     --sidebar-bg: #1e1e2e;
@@ -390,7 +442,7 @@ PAGE_HTML = """
     overflow: hidden;
   }
 
-  /* Sidebar */
+  /* --- Barre latérale (Sidebar) affichant l'historique --- */
   #sidebar {
     width: 260px;
     background: var(--sidebar-bg);
@@ -460,7 +512,7 @@ PAGE_HTML = """
   }
   .history-actions button:hover { opacity: 1; }
 
-  /* Main */
+  /* --- Zone principale (Main), contient le thread (bulles de chat) --- */
   #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   #topbar {
     padding: 16px 24px;
@@ -478,6 +530,7 @@ PAGE_HTML = """
   .msg.user .bubble { background: var(--bubble-user); color: #fff; border-bottom-right-radius: 4px; }
   .msg.assistant .bubble { background: var(--bubble-assistant); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
 
+  /* Style pour l'affichage de la requête SQL (petit encart gris sous la réponse) */
   .sql-note {
     font-family: "SF Mono", Consolas, monospace;
     font-size: 12px;
@@ -488,10 +541,12 @@ PAGE_HTML = """
     max-width: 720px;
   }
 
+  /* Style pour les tableaux de données retournés par la BDD */
   table { border-collapse: collapse; width: 100%; margin-top: 4px; font-size: 13px; background: #fff; }
   th, td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
   th { background: #f1f1f4; font-weight: 600; }
 
+  /* --- Barre de saisie (input) de l'utilisateur (en bas) --- */
   #input-bar { padding: 16px 24px; border-top: 1px solid var(--border); background: #fff; }
   #options { display: flex; gap: 15px; margin: 0 auto 10px auto; max-width: 760px; font-size: 14px; color: var(--text-muted); }
   #form { display: flex; gap: 10px; max-width: 760px; margin: 0 auto; }
@@ -546,6 +601,7 @@ PAGE_HTML = """
 </div>
 
 <script>
+// --- Ciblage des éléments HTML ---
 const thread = document.getElementById('thread');
 const form = document.getElementById('form');
 const input = document.getElementById('question');
@@ -559,6 +615,8 @@ const STORAGE_KEY = 'assistant-boutique-conversations';
 const EMPTY_STATE = '<div class="empty-state">Pose une question sur tes clients, commandes, produits...</div>';
 
 // --- Persistance (localStorage) ---------------------------------------
+// Ces fonctions gèrent l'historique des discussions stocké localement
+// directement dans le cache du navigateur web de l'utilisateur.
 
 function chargerConversations() {
   try {
@@ -579,7 +637,7 @@ let conversationActiveId = null;
 
 function nouvelleConversation() {
   const conv = { id: crypto.randomUUID(), titre: null, messages: [] };
-  conversations.unshift(conv);
+  conversations.unshift(conv); // Ajoute la discussion en début de liste
   conversationActiveId = conv.id;
   sauvegarderConversations();
   renderHistory();
@@ -621,12 +679,13 @@ function supprimerConversation(id) {
 }
 
 function renderHistory() {
+  // Rafraîchit l'affichage de la barre latérale (Sidebar) avec la liste des convs
   historyEl.innerHTML = '';
   conversations.forEach((conv) => {
     const item = document.createElement('div');
     item.className = 'history-item' + (conv.id === conversationActiveId ? ' active' : '');
     
-    // Titre cliquable
+    // Titre cliquable (Affiche la 1ere question posée si pas de titre explicite)
     const titreSpan = document.createElement('span');
     const titre = conv.titre || (conv.messages[0] ? conv.messages[0].question : 'Nouvelle conversation');
     titreSpan.textContent = titre;
@@ -637,7 +696,7 @@ function renderHistory() {
     titreSpan.style.whiteSpace = "nowrap";
     titreSpan.addEventListener('click', () => ouvrirConversation(conv.id));
 
-    // Boutons d'action (masqués par défaut, visibles au survol)
+    // Boutons d'action (Renommer / Supprimer, masqués par défaut, visibles au survol)
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'history-actions';
 
@@ -661,6 +720,7 @@ function renderHistory() {
 }
 
 function renderThread() {
+  // Rafraîchit la zone de chat (Main) avec les messages de la conversation active
   const conv = conversationCourante();
   thread.innerHTML = '';
   if (!conv || conv.messages.length === 0) {
@@ -675,7 +735,7 @@ function renderThread() {
       addAssistantBubble(m, false, false);
     }
   });
-  thread.scrollTop = thread.scrollHeight;
+  thread.scrollTop = thread.scrollHeight; // Descend l'ascenseur tout en bas
 }
 
 // --- Rendu des bulles ----------------------------------------------------
@@ -686,6 +746,7 @@ function clearEmptyState() {
 }
 
 function addUserBubble(text, scroll = true) {
+  // Ajoute la bulle bleue (utilisateur)
   clearEmptyState();
   const div = document.createElement('div');
   div.className = 'msg user';
@@ -695,11 +756,13 @@ function addUserBubble(text, scroll = true) {
 }
 
 function addAssistantBubble(msg, isError = false, scroll = true) {
+  // Ajoute la bulle grise/blanche (IA) qui comprend potentiellement 3 parties :
+  // 1. Le texte d'intro, 2. Le Tableau de données, 3. Le code SQL
   const div = document.createElement('div');
   div.className = 'msg assistant';
 
   let tableHtml = '';
-  // Affiche le tableau si l'utilisateur l'a demandé et qu'il y a des lignes
+  // Génération du code HTML pour le tableau de données (s'il y en a et si la case est cochée)
   if (msg.veut_tableau !== false && msg.resultats && msg.resultats.rows && msg.resultats.rows.length > 0) {
     const cols = msg.resultats.columns;
     tableHtml = '<table><thead><tr>' + cols.map(c => `<th>${escapeHtml(c)}</th>`).join('') + '</tr></thead><tbody>';
@@ -711,15 +774,18 @@ function addAssistantBubble(msg, isError = false, scroll = true) {
 
   let htmlContent = '';
   
+  // Ajoute la phrase d'intro de l'IA (en gérant le cas d'une erreur en rouge)
   if (msg.reponse) {
      htmlContent += `<div class="bubble ${isError ? 'error-bubble' : ''}">${escapeHtml(msg.reponse)}</div>`;
   }
   htmlContent += tableHtml;
   
+  // Ajoute l'encart gris affichant le code SQL exécuté
   if (msg.sql_genere) {
      htmlContent += `<div class="sql-note">${escapeHtml(msg.sql_genere)}</div>`;
   }
 
+  // Fallback (sécurité) si tout est désactivé côté interface
   if (!msg.reponse && !tableHtml && !isError) {
       htmlContent = `<div class="bubble"><em>Requête exécutée avec succès (réponse et tableau masqués ou vides).</em></div>` + htmlContent;
   }
@@ -730,6 +796,7 @@ function addAssistantBubble(msg, isError = false, scroll = true) {
 }
 
 function addTyping() {
+  // Affiche l'indicateur d'attente "Recherche en cours..." pendant l'appel à l'API Python
   const div = document.createElement('div');
   div.className = 'msg assistant';
   div.id = 'typing';
@@ -739,11 +806,14 @@ function addTyping() {
 }
 
 function removeTyping() {
+  // Supprime l'indicateur d'attente
   const el = document.getElementById('typing');
   if (el) el.remove();
 }
 
 function escapeHtml(str) {
+  // Sécurise les chaînes de caractères pour éviter qu'un script malveillant
+  // soit exécuté (Protection basique contre l'injection HTML/XSS).
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
@@ -762,8 +832,9 @@ clearAllBtn.addEventListener('click', () => {
   renderThread();
 });
 
+// Événement déclenché à l'envoi du formulaire (Touche Entrée ou clic "Envoyer")
 form.addEventListener('submit', async (e) => {
-  e.preventDefault();
+  e.preventDefault(); // Empêche la page de se recharger (comportement par défaut des formulaires)
   const question = input.value.trim();
   if (!question) return;
 
@@ -773,16 +844,19 @@ form.addEventListener('submit', async (e) => {
   const conv = conversationCourante();
   if (conv.titre === null) conv.titre = question;
 
+  // Lecture de l'état des cases à cocher options
   const veutReponse = checkReponse.checked;
   const veutTableau = checkTableau.checked;
 
   addUserBubble(question);
   input.value = '';
+  
+  // Désactive l'input et le bouton pendant l'appel pour empêcher le spam
   input.disabled = true;
   form.querySelector('button').disabled = true;
   addTyping();
 
-  // Construction de l'historique (pour donner du contexte à l'IA)
+  // Construction de l'historique raccourci pour l'envoyer à l'IA
   const historiqueAEnvoyer = conv.messages.flatMap(m => [
       { role: "user", content: m.question },
       { role: "assistant", content: m.reponse || "(Tableau de données généré)" }
@@ -790,6 +864,7 @@ form.addEventListener('submit', async (e) => {
 
   let entree = { question, veut_tableau: veutTableau };
 
+  // Appel réseau (Fetch / AJAX) vers la route /ask du backend FastAPI
   try {
     const res = await fetch('/ask', {
       method: 'POST',
@@ -819,6 +894,7 @@ form.addEventListener('submit', async (e) => {
     entree.erreur = 'Erreur réseau : ' + err;
     addAssistantBubble({ reponse: entree.erreur }, true);
   } finally {
+    // Enregistre l'échange dans l'historique local et réactive la zone de saisie
     conv.messages.push(entree);
     sauvegarderConversations();
     renderHistory();
@@ -829,7 +905,7 @@ form.addEventListener('submit', async (e) => {
 });
 
 // --- Démarrage ---------------------------------------------------------
-
+// Au premier lancement de la page, on charge la dernière conversation active
 if (conversations.length > 0) {
   conversationActiveId = conversations[0].id;
 }
@@ -842,8 +918,11 @@ renderThread();
 
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
+    """Route racine ('/') qui sert directement la page HTML contenant le frontend."""
     return PAGE_HTML
 
+# Point d'entrée pour lancer le script manuellement avec "python api.py"
 if __name__ == "__main__":
     import uvicorn
+    # Lance le serveur sur le port 8000, accessible localement et sur le réseau (0.0.0.0)
     uvicorn.run(app, host="0.0.0.0", port=8000)
