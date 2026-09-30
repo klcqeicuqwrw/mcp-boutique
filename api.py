@@ -73,7 +73,6 @@ def obtenir_dictionnaire() -> str:
         )
     return _dictionnaire_cache
 
-
 # Initialisation de l'application Web FastAPI
 app = FastAPI(title="API Boutique - Langage naturel vers SQL")
 

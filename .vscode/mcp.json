@@ -1,6 +1,6 @@
 {
   "servers": {
-    "boutique-database": {
+    "bailleur-social": {
       "type": "stdio",
       "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
       "args": [
