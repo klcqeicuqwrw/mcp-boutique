@@ -1,225 +1,531 @@
-import asyncio
+"""
+Serveur MCP - base de données du bailleur social (SQLite, lecture seule).
+
+Un assistant IA (Copilot dans VS Code, Claude Desktop...) se connecte à ce
+serveur et peut :
+  - explorer la base   : lister_tables, rechercher_colonnes, decrire_table
+  - connaître les données : apercu_table, valeurs_distinctes
+  - l'interroger       : executer_requete_sql (SELECT uniquement)
+
+Le dictionnaire de données (fichier .md) est lu et fusionné avec la structure
+réelle de la base : l'assistant voit le sens métier de chaque colonne.
+
+Variables d'environnement (toutes optionnelles) :
+  SQLITE_DB_PATH        chemin de la base            (défaut : bailleur_social.db)
+  DICTIONNAIRE_PATH     chemin du dictionnaire .md   (défaut : dictionnaire_donnees_bailleur_social.md)
+  MCP_MAX_ROWS          lignes max par requête       (défaut : 500)
+  MCP_MAX_CHARS         taille max de la réponse     (défaut : 60000 caractères)
+  MCP_SQL_TIMEOUT       durée max d'une requête, en secondes (défaut : 20)
+  MCP_TABLES_AUTORISEES liste de tables séparées par des virgules (défaut : toutes)
+  MCP_BLOQUER_RGPD      1 = interdit la lecture des colonnes marquées RGPD (défaut : 0)
+  MCP_JOURNAL           fichier de journal des requêtes ("" = pas de journal)
+  MCP_TRANSPORT         stdio (défaut) ou http
+"""
+import functools
 import json
 import os
 import re
 import sqlite3
+import sys
+import time
+import unicodedata
 from contextlib import closing
+from datetime import datetime
 from pathlib import Path
 
-# ---------------------------------------------------------------------------
-# Compatibilité SDK MCP (Model Context Protocol)
-# Le protocole MCP permet à des IA de se connecter à des outils externes.
-# Ce bloc gère les différentes versions de la librairie 'mcp' de Python.
-# ---------------------------------------------------------------------------
-try:
-    # Tentative d'import pour le SDK MCP version 1.x
-    from mcp.server.fastmcp import FastMCP
-except ModuleNotFoundError as exc:
-    # Si le paquet global n'est pas du tout installé, on avertit l'utilisateur
-    if exc.name == "mcp":
-        raise ModuleNotFoundError(
-            "Le paquet 'mcp' n'est pas installé dans cet environnement Python. "
-            "Installez-le avec : pip install mcp"
-        ) from exc
-
-    # Si on arrive ici, c'est que le SDK est en version 2.x : FastMCP a été 
-    # renommé en MCPServer et a changé de dossier. On gère l'adaptation.
-    from mcp.server.mcpserver import MCPServer
-
-    class FastMCP(MCPServer):
-        """Wrapper de compatibilité pour faire fonctionner l'ancien code avec l'API serveur MCP v2."""
-
-        def run_stdio(self) -> None:
-            # Exécute la boucle asynchrone pour la communication standard (stdio)
-            asyncio.run(self.run_stdio_async())
-
-# Initialisation du serveur MCP avec un nom identifiable par l'IA
-mcp = FastMCP("BailleurSocialDatabase")
+try:  # SDK MCP 2.x
+    from mcp.server.mcpserver import MCPServer as _Server
+    from mcp.server.mcpserver.exceptions import ToolError
+except ImportError:  # SDK MCP 1.x
+    from mcp.server.fastmcp import FastMCP as _Server
+    from mcp.server.fastmcp.exceptions import ToolError
 
 # ---------------------------------------------------------------------------
-# Configuration de la base de données
-# Ce fichier expose les fonctions SQLite utiles à un client MCP (l'IA).
-# L'idée est simple : un agent externe (ex: Claude Desktop) peut demander 
-# le schéma de la base et exécuter uniquement des requêtes de lecture, jamais des mises à jour.
+# Configuration
 # ---------------------------------------------------------------------------
-
-# Limite le nombre de résultats pour éviter de saturer la mémoire de l'IA (et ses tokens)
-MAX_ROWS = 500
-
-# Chemin vers le fichier SQLite. Par défaut "bailleur_social.db" dans le même dossier
-DATABASE_PATH = Path(
-    os.environ.get("SQLITE_DB_PATH", "bailleur_social.db")
-).expanduser().resolve()
+# Les chemins par défaut sont relatifs à CE fichier (et non au dossier depuis
+# lequel VS Code ou Claude Desktop lance le serveur).
+BASE_DIR = Path(__file__).resolve().parent
 
 
-def _connect_read_only() -> sqlite3.Connection:
-    """Ouvre la base SQLite configurée strictement en lecture seule."""
-    if not DATABASE_PATH.is_file():
+def _chemin(nom_variable: str, defaut: str) -> Path:
+    return Path(os.environ.get(nom_variable) or BASE_DIR / defaut).expanduser().resolve()
+
+
+def _booleen(nom_variable: str) -> bool:
+    return os.environ.get(nom_variable, "0").strip().lower() in ("1", "true", "oui", "yes")
+
+
+DB_PATH = _chemin("SQLITE_DB_PATH", "bailleur_social.db")
+DICO_PATH = _chemin("DICTIONNAIRE_PATH", "dictionnaire_donnees_bailleur_social.md")
+MAX_ROWS = int(os.environ.get("MCP_MAX_ROWS", "500"))
+MAX_CHARS = int(os.environ.get("MCP_MAX_CHARS", "60000"))
+SQL_TIMEOUT = float(os.environ.get("MCP_SQL_TIMEOUT", "20"))
+BLOQUER_RGPD = _booleen("MCP_BLOQUER_RGPD")
+TABLES_AUTORISEES = {
+    t.strip().lower()
+    for t in os.environ.get("MCP_TABLES_AUTORISEES", "").split(",")
+    if t.strip()
+}
+JOURNAL_PATH = (
+    _chemin("MCP_JOURNAL", "mcp_requetes.log") if os.environ.get("MCP_JOURNAL", "x") else None
+)
+
+INSTRUCTIONS = """\
+Base SQLite d'un bailleur social (entrepôt de données DWH, une cinquantaine de tables).
+Méthode conseillée :
+1. lister_tables ou rechercher_colonnes pour repérer les tables utiles ;
+2. decrire_table pour voir les colonnes, leur sens métier et les jointures ;
+3. valeurs_distinctes pour connaître les codes et valeurs possibles AVANT de filtrer ;
+4. executer_requete_sql avec un SELECT (lecture seule). Préfère les agrégats
+   (COUNT, SUM, GROUP BY) aux lignes brutes et mets un LIMIT.
+Règles : ne devine jamais un nom de table ou de colonne. Les types du dictionnaire
+viennent de SQL Server mais la base est SQLite : utilise la syntaxe SQLite (LIMIT,
+COALESCE, strftime...). Les colonnes marquées rgpd sont des données personnelles :
+ne les affiche que si c'est indispensable.
+"""
+
+mcp = _Server("BailleurSocialDatabase", instructions=INSTRUCTIONS)
+
+
+# ---------------------------------------------------------------------------
+# Outils de bas niveau
+# ---------------------------------------------------------------------------
+def _json(objet) -> str:
+    return json.dumps(objet, ensure_ascii=False, default=str, separators=(",", ":"))
+
+
+def _q(identifiant: str) -> str:
+    """Met un nom de table ou de colonne entre guillemets (anti-injection)."""
+    return '"' + identifiant.replace('"', '""') + '"'
+
+
+def _norm(texte: str) -> str:
+    """Minuscules sans accents, pour les recherches."""
+    texte = unicodedata.normalize("NFD", texte or "")
+    return "".join(c for c in texte if not unicodedata.combining(c)).lower()
+
+
+def _connexion() -> sqlite3.Connection:
+    """Connexion SQLite en lecture seule (mode=ro : écriture impossible)."""
+    if not DB_PATH.is_file():
         raise FileNotFoundError(
-            f"Base SQLite introuvable: {DATABASE_PATH}. "
-            "Définissez SQLITE_DB_PATH ou créez bailleur_social.db."
+            f"Base SQLite introuvable : {DB_PATH}. Définissez SQLITE_DB_PATH."
         )
-
-    # Le paramètre ?mode=ro (read-only) est une sécurité physique empêchant
-    # toute altération de la base (INSERT, UPDATE, DELETE).
-    connection = sqlite3.connect(
-        f"{DATABASE_PATH.as_uri()}?mode=ro",
-        uri=True,
-    )
-    # Permet d'accéder aux colonnes par leur nom plutôt que par un index numérique
-    connection.row_factory = sqlite3.Row
-    return connection
+    con = sqlite3.connect(f"{DB_PATH.as_uri()}?mode=ro", uri=True)
+    con.row_factory = sqlite3.Row
+    return con
 
 
-def _remove_leading_comments(query: str) -> str:
-    """
-    Retire les commentaires SQL au début de la requête.
-    Cette étape est cruciale car l'IA ajoute parfois des commentaires,
-    ce qui empêcherait notre regex (plus bas) de détecter si le premier
-    mot est bien un 'SELECT'.
-    """
-    remaining = query.lstrip()
-    while remaining.startswith("--") or remaining.startswith("/*"):
-        # Supprime les commentaires sur une seule ligne (--)
-        if remaining.startswith("--"):
-            end = remaining.find("\n")
-            if end == -1:
-                return ""
-            remaining = remaining[end + 1 :].lstrip()
-            continue
-
-        # Supprime les blocs de commentaires multilignes (/* ... */)
-        end = remaining.find("*/", 2)
-        if end == -1:
-            return ""
-        remaining = remaining[end + 2 :].lstrip()
-    return remaining
-
-
-def _validate_read_query(query: str) -> str:
-    """
-    Validation de sécurité de la requête générée par l'IA.
-    Vérifie qu'il s'agit bien d'une lecture simple et bloque les requêtes multiples.
-    """
-    query = _remove_leading_comments(query.strip())
-    
-    if not query:
-        raise ValueError("La requête SQL ne peut pas être vide.")
-        
-    # Interdit le point-virgule au milieu de la requête pour empêcher l'injection 
-    # de multiples commandes (ex: SELECT * FROM X ; DROP TABLE Y)
-    if ";" in query.rstrip(";"):
-        raise ValueError("Une seule requête SQL est autorisée.")
-        
-    # N'autorise que les mots clés de lecture (SELECT, WITH) ou d'analyse (EXPLAIN)
-    if not re.match(r"^(SELECT|WITH|EXPLAIN)\b", query, re.IGNORECASE):
-        raise ValueError("Vous n'êtes pas autorisé à exécuter cette requête.")
-        
-    return query.rstrip(";").strip()
-
-
-# ---------------------------------------------------------------------------
-# Outils exposés à l'IA (Tools)
-# Le décorateur @mcp.tool() permet à l'IA de voir et d'utiliser ces fonctions.
-# ---------------------------------------------------------------------------
-
-@mcp.tool()
-def dire_bonjour(nom: str) -> str:
-    """Renvoie un message de salutation personnalisé. 
-    (Outil de test simple pour vérifier que le serveur MCP communique bien)."""
-    return f"Bonjour, {nom} !"
-
-
-@mcp.tool()
-def obtenir_schema() -> str:
-    """Retourne les tables, colonnes et index disponibles dans la base SQLite.
-    
-    C'est le premier outil que l'IA va appeler. Le client MCP demande d'abord 
-    le schéma pour savoir quelles tables existent et quelles colonnes sont 
-    disponibles avant d'inventer une requête SQL.
-    """
-    with closing(_connect_read_only()) as connection:
-        objects = connection.execute(
-            """
-            SELECT type, name, sql
-            FROM sqlite_master
-            WHERE type IN ('table', 'view', 'index')
-              AND name NOT LIKE 'sqlite_%'
-            ORDER BY type, name
-            """
-        ).fetchall()
-
-    # Convertit la réponse SQL en JSON compréhensible par l'IA
-    return json.dumps(
-        [dict(row) for row in objects],
-        ensure_ascii=False,
-        indent=2,
-    )
-
-
-@mcp.tool()
-def executer_requete_sql(requete: str) -> str:
-    """Exécute une requête SQL de lecture et retourne les résultats en JSON.
-
-    L'IA utilise cet outil APRÈS avoir consulté 'obtenir_schema'. 
-    Elle traduit la demande de l'utilisateur (en langage naturel) en une 
-    requête SQL précise, l'envoie ici, et récupère les données brutes.
-    """
-    # 1. On valide et sécurise la requête
-    safe_query = _validate_read_query(requete)
-
+def _journaliser(outil, sql, statut, lignes=0, ms=0, erreur=None):
+    """Ajoute une ligne au journal (ne fait jamais planter le serveur)."""
+    if JOURNAL_PATH is None:
+        return
     try:
-        # 2. Exécution sur la base de données
-        with closing(_connect_read_only()) as connection:
-            cursor = connection.execute(safe_query)
-            # Récupère le nom des colonnes pour formater le résultat
-            columns = [description[0] for description in cursor.description or []]
-            # Limite l'extraction à MAX_ROWS + 1 pour savoir si on a dépassé la limite
-            rows = cursor.fetchmany(MAX_ROWS + 1)
-    except sqlite3.Error as error:
-        raise RuntimeError(f"Erreur SQLite pendant l'exécution: {error}") from error
-
-    # 3. Tronque les résultats s'il y a trop de données
-    truncated = len(rows) > MAX_ROWS
-    if truncated:
-        rows = rows[:MAX_ROWS]
-
-    # 4. Formate et renvoie le JSON à l'IA
-    return json.dumps(
-        {
-            "columns": columns,
-            "rows": [dict(zip(columns, row)) for row in rows],
-            "row_count": len(rows),
-            "truncated": truncated,
-            "max_rows": MAX_ROWS,
-        },
-        ensure_ascii=False,
-        default=str,
-        indent=2,
-    )
+        ligne = {
+            "date": datetime.now().isoformat(timespec="seconds"),
+            "outil": outil,
+            "statut": statut,
+            "lignes": lignes,
+            "ms": ms,
+            "sql": sql,
+        }
+        if erreur:
+            ligne["erreur"] = erreur
+        with JOURNAL_PATH.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(ligne, ensure_ascii=False) + "\n")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[journal] écriture impossible : {exc}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
-# Point d'entrée du serveur
+# Dictionnaire de données (fichier .md, découpé par table)
+# ---------------------------------------------------------------------------
+_SECTION = re.compile(r"^### (\S+)[ \t]*$", re.M)
+_LIGNE_COLONNE = re.compile(r"^\|\s*`([^`]+)`\s*\|\s*`([^`]*)`\s*\|([^|]*)\|(.*)\|\s*$")
+_dico_cache = None
+
+
+def _dico() -> dict:
+    """{nom_table_minuscule: {theme, description, jointures, colonnes, rgpd}}."""
+    global _dico_cache
+    if _dico_cache is not None:
+        return _dico_cache
+    resultat = {}
+    if DICO_PATH.is_file():
+        texte = DICO_PATH.read_text(encoding="utf-8").replace("\r\n", "\n")
+        sections = list(_SECTION.finditer(texte))
+        for i, m in enumerate(sections):
+            fin = sections[i + 1].start() if i + 1 < len(sections) else len(texte)
+            entree = {"nom": m.group(1), "theme": "", "description": "",
+                      "jointures": "", "colonnes": [], "rgpd": set()}
+            for ligne in texte[m.end():fin].strip().split("\n"):
+                ligne = ligne.strip()
+                if not ligne or ligne.startswith("|---"):
+                    continue
+                col = _LIGNE_COLONNE.match(ligne)
+                if col:
+                    nom, type_, cles, desc = (g.strip() for g in col.groups())
+                    if nom.lower() == "colonne":
+                        continue
+                    entree["colonnes"].append(
+                        {"nom": nom, "type": type_, "cles": cles, "description": desc}
+                    )
+                    if "RGPD" in cles:
+                        entree["rgpd"].add(nom.lower())
+                elif ligne.startswith("*"):
+                    entree["theme"] = ligne.strip("*").split("·")[0].strip()
+                elif ligne.startswith("Jointures"):
+                    entree["jointures"] = ligne
+                elif not entree["description"]:
+                    entree["description"] = ligne
+            resultat[m.group(1).lower()] = entree
+    _dico_cache = resultat
+    return resultat
+
+
+def _colonnes_rgpd(table: str) -> set:
+    entree = _dico().get(table.lower())
+    return entree["rgpd"] if entree else set()
+
+
+# ---------------------------------------------------------------------------
+# Structure de la base
+# ---------------------------------------------------------------------------
+def _tables() -> list:
+    with closing(_connexion()) as con:
+        lignes = con.execute(
+            "SELECT name FROM sqlite_master WHERE type IN ('table','view') "
+            "AND name NOT LIKE 'sqlite_%' ORDER BY name"
+        ).fetchall()
+    noms = [l[0] for l in lignes]
+    if TABLES_AUTORISEES:
+        noms = [n for n in noms if n.lower() in TABLES_AUTORISEES]
+    return noms
+
+
+def _resoudre_table(nom: str) -> str:
+    tables = _tables()
+    par_nom = {t.lower(): t for t in tables}
+    cle = (nom or "").strip().strip('"`[]').lower()
+    for essai in (cle, cle.replace(".", "_"), "dwh_" + cle):
+        if essai in par_nom:
+            return par_nom[essai]
+    proches = [t for t in tables if cle and cle in t.lower()][:10]
+    aide = f" Tables proches : {', '.join(proches)}." if proches else " Utilise lister_tables."
+    raise ValueError(f"Table inconnue : {nom}.{aide}")
+
+
+def _resoudre_colonne(table: str, nom: str) -> str:
+    with closing(_connexion()) as con:
+        colonnes = [r["name"] for r in con.execute(f"PRAGMA table_info({_q(table)})")]
+    for c in colonnes:
+        if c.lower() == (nom or "").strip().strip('"`[]').lower():
+            return c
+    raise ValueError(f"Colonne inconnue dans {table} : {nom}. Utilise decrire_table.")
+
+
+# ---------------------------------------------------------------------------
+# Exécution sécurisée d'une requête
+# ---------------------------------------------------------------------------
+def _authorizer():
+    """Filtre appelé par SQLite pour CHAQUE accès pendant l'exécution."""
+    rgpd = {t: e["rgpd"] for t, e in _dico().items()} if BLOQUER_RGPD else {}
+    autorisees = TABLES_AUTORISEES or None
+
+    def verifier(action, arg1, arg2, _base, _source):
+        if action == sqlite3.SQLITE_READ:
+            table, colonne = (arg1 or "").lower(), (arg2 or "").lower()
+            if table.startswith("sqlite_"):
+                return sqlite3.SQLITE_DENY
+            if autorisees is not None and table and table not in autorisees:
+                return sqlite3.SQLITE_DENY
+            if colonne and colonne in rgpd.get(table, ()):
+                return sqlite3.SQLITE_DENY
+            return sqlite3.SQLITE_OK
+        if action in (sqlite3.SQLITE_SELECT, sqlite3.SQLITE_FUNCTION, sqlite3.SQLITE_RECURSIVE):
+            return sqlite3.SQLITE_OK
+        return sqlite3.SQLITE_DENY  # toute écriture, PRAGMA, ATTACH... est refusée
+
+    return verifier
+
+
+def _retirer_commentaires_debut(sql: str) -> str:
+    reste = sql.lstrip()
+    while reste.startswith("--") or reste.startswith("/*"):
+        if reste.startswith("--"):
+            fin = reste.find("\n")
+            reste = "" if fin == -1 else reste[fin + 1:].lstrip()
+        else:
+            fin = reste.find("*/", 2)
+            reste = "" if fin == -1 else reste[fin + 2:].lstrip()
+    return reste
+
+
+def _valider(sql: str) -> str:
+    sql = _retirer_commentaires_debut((sql or "").strip()).rstrip().rstrip(";").rstrip()
+    if not sql:
+        raise ValueError("La requête SQL est vide.")
+    if not re.match(r"^(SELECT|WITH|EXPLAIN)\b", sql, re.IGNORECASE):
+        raise ValueError("Seules les requêtes de lecture (SELECT, WITH, EXPLAIN) sont autorisées.")
+    return sql
+
+
+def _noms_uniques(colonnes: list) -> list:
+    vus, resultat = {}, []
+    for c in colonnes:
+        vus[c] = vus.get(c, 0) + 1
+        resultat.append(c if vus[c] == 1 else f"{c}_{vus[c]}")
+    return resultat
+
+
+def _executer(sql: str, outil: str, max_lignes: int = MAX_ROWS) -> dict:
+    """Valide puis exécute une requête. Renvoie un dictionnaire prêt à sérialiser."""
+    debut = time.monotonic()
+    try:
+        sql = _valider(sql)
+        with closing(_connexion()) as con:
+            con.set_authorizer(_authorizer())
+            limite_temps = time.monotonic() + SQL_TIMEOUT
+            con.set_progress_handler(lambda: 1 if time.monotonic() > limite_temps else 0, 100_000)
+            try:
+                curseur = con.execute(sql)
+                colonnes = _noms_uniques([d[0] for d in curseur.description or []])
+                lignes = curseur.fetchmany(max_lignes + 1)
+            except sqlite3.Error as erreur:
+                message = str(erreur)
+                if "not authorized" in message or "prohibited" in message:
+                    raise PermissionError(
+                        "Accès refusé : la requête touche une table ou une colonne interdite "
+                        "(tables non autorisées, colonnes RGPD bloquées ou opération d'écriture)."
+                    ) from erreur
+                if "interrupted" in message:
+                    raise TimeoutError(
+                        f"Requête trop longue (limite {SQL_TIMEOUT:g} s) : ajoute des filtres."
+                    ) from erreur
+                raise ValueError(f"Erreur SQLite : {message}") from erreur
+    except Exception as erreur:
+        _journaliser(outil, sql, "refusé" if isinstance(erreur, PermissionError) else "erreur",
+                     ms=int((time.monotonic() - debut) * 1000), erreur=str(erreur))
+        raise
+
+    tronque = len(lignes) > max_lignes
+    lignes = [list(l) for l in lignes[:max_lignes]]
+    resultat = {
+        "columns": colonnes,
+        "rows": [dict(zip(colonnes, l)) for l in lignes],
+        "row_count": len(lignes),
+        "truncated": tronque,
+        "max_rows": max_lignes,
+    }
+    # Garde-fou sur la taille : on réduit le nombre de lignes si la réponse est énorme.
+    while len(_json(resultat)) > MAX_CHARS and len(resultat["rows"]) > 1:
+        resultat["rows"] = resultat["rows"][: max(1, len(resultat["rows"]) // 2)]
+        resultat["row_count"] = len(resultat["rows"])
+        resultat["truncated"] = True
+    if resultat["truncated"]:
+        resultat["note"] = (
+            "Résultat tronqué : affine la requête (filtres, agrégats, LIMIT) pour tout voir."
+        )
+    _journaliser(outil, sql, "ok", lignes=resultat["row_count"],
+                 ms=int((time.monotonic() - debut) * 1000))
+    return resultat
+
+
+# ---------------------------------------------------------------------------
+# Outils exposés à l'assistant
+# ---------------------------------------------------------------------------
+def _lisible(fonction):
+    """Transforme les erreurs prévisibles en ToolError.
+
+    Avec le SDK 2.x, seul le message d'une ToolError arrive jusqu'à l'assistant ;
+    toute autre exception devient un vague "Error executing tool" et il ne peut
+    pas se corriger (colonne inconnue, table interdite...).
+    """
+    @functools.wraps(fonction)
+    def enveloppe(*args, **kwargs):
+        try:
+            return fonction(*args, **kwargs)
+        except (ValueError, PermissionError, TimeoutError, FileNotFoundError, sqlite3.Error) as erreur:
+            raise ToolError(str(erreur)) from None
+    return enveloppe
+
+
+@mcp.tool()
+@_lisible
+def lister_tables(theme: str = "") -> str:
+    """Liste les tables de la base avec leur thème métier, une courte description
+    et leur nombre de colonnes. Point de départ pour explorer la base.
+
+    theme : filtre facultatif sur le thème (ex. "Bail", "Accession", "Patrimoine").
+    """
+    dico = _dico()
+    filtre = _norm(theme).strip()
+    resultat, themes = [], set()
+    with closing(_connexion()) as con:
+        for table in _tables():
+            entree = dico.get(table.lower(), {})
+            th = entree.get("theme", "")
+            if th:
+                themes.add(th)
+            if filtre and filtre not in _norm(th) and filtre not in _norm(table):
+                continue
+            nb = len(con.execute(f"PRAGMA table_info({_q(table)})").fetchall())
+            ligne = {"table": table, "colonnes": nb}
+            if th:
+                ligne["theme"] = th
+            if entree.get("description"):
+                ligne["description"] = entree["description"][:160]
+            resultat.append(ligne)
+    return _json({"nombre_tables": len(resultat), "themes": sorted(themes), "tables": resultat})
+
+
+@mcp.tool()
+@_lisible
+def rechercher_colonnes(mot_cle: str, limite: int = 25) -> str:
+    """Cherche des colonnes par mot-clé (dans leur nom ET leur description) sur toute
+    la base. Indispensable pour trouver où se trouve une information
+    (ex. "loyer", "date entrée", "vacance").
+
+    mot_cle : un ou plusieurs mots ; tous doivent apparaître (sans tenir compte des accents).
+    limite  : nombre maximum de résultats (1 à 100).
+    """
+    termes = [t for t in _norm(mot_cle).split() if t]
+    if not termes:
+        raise ValueError("Donne au moins un mot-clé.")
+    limite = max(1, min(int(limite), 100))
+    dico = _dico()
+    trouvees = []
+    with closing(_connexion()) as con:
+        for table in _tables():
+            entree = dico.get(table.lower())
+            if entree:
+                colonnes = [(c["nom"], c["type"], c["description"]) for c in entree["colonnes"]]
+            else:
+                colonnes = [(r["name"], r["type"], "")
+                            for r in con.execute(f"PRAGMA table_info({_q(table)})")]
+            rgpd = entree["rgpd"] if entree else set()
+            for nom, type_, desc in colonnes:
+                nom_n, desc_n = _norm(nom).replace("_", " "), _norm(desc)
+                ensemble = nom_n + " " + desc_n
+                if all(t in ensemble for t in termes):
+                    score = sum(2 if t in nom_n else 1 for t in termes)
+                    ligne = {"table": table, "colonne": nom, "type": type_}
+                    if desc:
+                        ligne["description"] = desc[:200]
+                    if nom.lower() in rgpd:
+                        ligne["rgpd"] = True
+                    trouvees.append((score, ligne))
+    trouvees.sort(key=lambda x: (-x[0], x[1]["table"], x[1]["colonne"]))
+    return _json({"total_trouve": len(trouvees), "resultats": [l for _, l in trouvees[:limite]]})
+
+
+@mcp.tool()
+@_lisible
+def decrire_table(table: str) -> str:
+    """Décrit une table : description métier, jointures, nombre de lignes et, pour chaque
+    colonne, son type, son sens (dictionnaire de données) et si elle est un identifiant
+    (pk) ou une donnée personnelle (rgpd). À appeler avant d'écrire une requête.
+
+    table : nom exact de la table (ex. "DWH_Bail").
+    """
+    nom = _resoudre_table(table)
+    entree = _dico().get(nom.lower())
+    rgpd = entree["rgpd"] if entree else set()
+    dico_cols = {c["nom"].lower(): c for c in entree["colonnes"]} if entree else {}
+    with closing(_connexion()) as con:
+        infos = con.execute(f"PRAGMA table_info({_q(nom)})").fetchall()
+        fks = con.execute(f"PRAGMA foreign_key_list({_q(nom)})").fetchall()
+        nb_lignes = con.execute(f"SELECT COUNT(*) FROM {_q(nom)}").fetchone()[0]
+    colonnes = []
+    for r in infos:
+        d = dico_cols.get(r["name"].lower(), {})
+        col = {"nom": r["name"], "type": r["type"] or d.get("type", "")}
+        if r["pk"] or "PK" in d.get("cles", ""):
+            col["pk"] = True
+        if d.get("description"):
+            col["description"] = d["description"]
+        if r["name"].lower() in rgpd:
+            col["rgpd"] = True
+            if BLOQUER_RGPD:
+                col["bloquee"] = True
+        colonnes.append(col)
+    resultat = {"table": nom, "nombre_lignes": nb_lignes}
+    if entree:
+        for cle in ("theme", "description", "jointures"):
+            if entree[cle]:
+                resultat[cle] = entree[cle]
+    if fks:
+        resultat["cles_etrangeres"] = [
+            f"{f['from']} -> {f['table']}.{f['to']}" for f in fks
+        ]
+    resultat["colonnes"] = colonnes
+    return _json(resultat)
+
+
+@mcp.tool()
+@_lisible
+def apercu_table(table: str, limite: int = 5) -> str:
+    """Affiche quelques lignes d'une table pour voir à quoi ressemblent les données.
+
+    table  : nom exact de la table.
+    limite : nombre de lignes (1 à 20).
+    """
+    nom = _resoudre_table(table)
+    limite = max(1, min(int(limite), 20))
+    with closing(_connexion()) as con:
+        colonnes = [r["name"] for r in con.execute(f"PRAGMA table_info({_q(nom)})")]
+    if BLOQUER_RGPD:
+        bloquees = _colonnes_rgpd(nom)
+        colonnes = [c for c in colonnes if c.lower() not in bloquees]
+    liste = ", ".join(_q(c) for c in colonnes) or "1"
+    return _json(_executer(f"SELECT {liste} FROM {_q(nom)} LIMIT {limite}", "apercu_table", limite))
+
+
+@mcp.tool()
+@_lisible
+def valeurs_distinctes(table: str, colonne: str, limite: int = 30) -> str:
+    """Donne les valeurs les plus fréquentes d'une colonne avec leur effectif. Utile pour
+    connaître les codes possibles (statuts, types, états...) avant de filtrer.
+
+    table   : nom exact de la table.
+    colonne : nom exact de la colonne.
+    limite  : nombre de valeurs (1 à 200).
+    """
+    nom = _resoudre_table(table)
+    col = _resoudre_colonne(nom, colonne)
+    limite = max(1, min(int(limite), 200))
+    sql = (f"SELECT {_q(col)} AS valeur, COUNT(*) AS nb FROM {_q(nom)} "
+           f"GROUP BY {_q(col)} ORDER BY nb DESC LIMIT {limite}")
+    return _json(_executer(sql, "valeurs_distinctes", limite))
+
+
+@mcp.tool()
+@_lisible
+def executer_requete_sql(requete: str) -> str:
+    """Exécute UNE requête SQL de lecture (SELECT, WITH ou EXPLAIN) et renvoie le résultat
+    en JSON (colonnes, lignes, nombre de lignes, indicateur de troncature).
+
+    Base en lecture seule, syntaxe SQLite. Consulte d'abord decrire_table (et
+    valeurs_distinctes pour les codes) : ne devine pas les noms de colonnes. Utilise des
+    agrégats et un LIMIT ; le résultat est tronqué à MAX_ROWS lignes.
+    """
+    return _json(_executer(requete, "executer_requete_sql"))
+
+
+# ---------------------------------------------------------------------------
+# Point d'entrée
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    # Le serveur MCP peut communiquer de deux manières :
-    # - stdio (standard in/out) : L'IA et ce script tournent sur la même machine. L'IA lance le script et lui "parle" via le terminal.
-    # - http : Le serveur écoute sur un port réseau, utile si l'IA est distante.
-    transport = os.environ.get("MCP_TRANSPORT", "stdio")
-
-    if transport == "http":
-        host = os.environ.get("MCP_HOST", "0.0.0.0")
-        port = int(os.environ.get("MCP_PORT", "8000"))
+    transport = os.environ.get("MCP_TRANSPORT", "stdio").strip().lower()
+    if transport in ("http", "streamable-http"):
+        # Attention : aucune authentification. Reste sur 127.0.0.1 sauf réseau de confiance.
+        hote = os.environ.get("MCP_HOST", "127.0.0.1")
+        port = int(os.environ.get("MCP_PORT", "8765"))
         try:
-            mcp.run(transport="streamable-http", host=host, port=port)
-        except AttributeError:
-            # Fallback en cas de problème avec le transport HTTP
-            mcp.run_stdio()
+            mcp.run("streamable-http", host=hote, port=port)
+        except TypeError:  # SDK 1.x : hôte et port se règlent dans settings
+            mcp.settings.host, mcp.settings.port = hote, port
+            mcp.run("streamable-http")
     else:
-        try:
-            # Lancement par défaut
-            mcp.run()
-        except AttributeError:
-            # Lancement via l'entrée/sortie standard (stdio)
-            mcp.run_stdio()
+        mcp.run()
