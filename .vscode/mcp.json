@@ -8,6 +8,8 @@
       ],
       "env": {
         "SQLITE_DB_PATH": "${workspaceFolder}/bailleur_social.db"
+        //"SQLITE_DB_PATH": "${workspaceFolder}/bailleur_social (1).db"
+
       }
     }
   }
