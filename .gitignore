@@ -1,5 +1,8 @@
-.env
-__pycache__/
-*.pyc
 .venv/
-app.db
+__pycache__/
+.env
+*.db
+*.db-wal
+*.db-shm
+mcp_requetes.log*
+.pytest_cache/

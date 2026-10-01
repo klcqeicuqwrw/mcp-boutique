@@ -1,16 +1,19 @@
 {
+  // Serveur MCP local (stdio). Windows / macOS / Linux : adapte seulement la ligne "command".
   "servers": {
     "bailleur-social": {
       "type": "stdio",
-      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
-      "args": [
-        "${workspaceFolder}\\server.py"
-      ],
+      // Windows : ${workspaceFolder}/.venv/Scripts/python.exe   |  macOS/Linux : ${workspaceFolder}/.venv/bin/python
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "args": ["${workspaceFolder}/server.py"],
+      "cwd": "${workspaceFolder}",
       "env": {
-        "SQLITE_DB_PATH": "${workspaceFolder}/bailleur_social.db"
-        //"SQLITE_DB_PATH": "${workspaceFolder}/bailleur_social (1).db"
-
-      }
+        "SQLITE_DB_PATH": "${workspaceFolder}/bailleur_social.db",
+        "MCP_BLOQUER_RGPD": "1",
+        "MCP_SQL_TIMEOUT": "20"
+      },
+      // Optionnel : recharge le serveur à chaque sauvegarde + débogage pas à pas (VS Code récent)
+      "dev": { "watch": "**/*.py", "debug": { "type": "debugpy" } }
     }
   }
 }
