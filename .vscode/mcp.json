@@ -8,8 +8,8 @@
       "args": ["${workspaceFolder}/server.py"],
       "cwd": "${workspaceFolder}",
       "env": {
-        "SQLITE_DB_PATH": "${workspaceFolder}/bailleur_social.db",
-        "MCP_BLOQUER_RGPD": "1",
+        "SQLITE_DB_PATH": "${workspaceFolder}/bailleur_social (2).db",
+        "MCP_BLOQUER_RGPD": "0",
         "MCP_SQL_TIMEOUT": "20"
       },
       // Optionnel : recharge le serveur à chaque sauvegarde + débogage pas à pas (VS Code récent)

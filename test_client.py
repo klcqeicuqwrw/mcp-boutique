@@ -163,7 +163,7 @@ def test_sql_geant():
 
 # --------------------------------------------------------------------------- enveloppe des outils
 def test_erreur_lisible_pour_l_assistant():
-    from mcp.server.fastmcp.exceptions import ToolError
+    from server import ToolError
     with pytest.raises(ToolError) as e:
         asyncio.run(server.executer_requete_sql("SELECT Nom FROM DWH_Client"))
     assert "refus" in str(e.value).lower()
@@ -177,7 +177,7 @@ def test_outil_decrire_table():
 
 
 def test_table_inconnue_message_utile():
-    from mcp.server.fastmcp.exceptions import ToolError
+    from server import ToolError
     with pytest.raises(ToolError) as e:
         asyncio.run(server.decrire_table("client_inexistant"))
     assert "Table inconnue" in str(e.value)

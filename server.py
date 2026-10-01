@@ -19,6 +19,7 @@ Variables d'environnement (toutes optionnelles) :
   MCP_TABLES_AUTORISEES liste de tables séparées par des virgules (défaut : toutes)
   MCP_BLOQUER_RGPD      1 = interdit la lecture des colonnes marquées RGPD (défaut : 1 ; mets 0 pour autoriser)
   MCP_JOURNAL           fichier de journal des requêtes ("" = pas de journal)
+  MCP_JOURNAL_SQL_MAX   longueur max du SQL écrit dans le journal (défaut : 2000)
   MCP_TRANSPORT         stdio (défaut) ou http
 """
 import asyncio
@@ -81,6 +82,7 @@ DICO_PATH = _chemin("DICTIONNAIRE_PATH", "dictionnaire_donnees_bailleur_social.m
 MAX_ROWS = _entier("MCP_MAX_ROWS", 500)
 MAX_CHARS = _entier("MCP_MAX_CHARS", 60000, 1000)
 SQL_TIMEOUT = float(_entier("MCP_SQL_TIMEOUT", 20))
+JOURNAL_SQL_MAX = _entier("MCP_JOURNAL_SQL_MAX", 2000, 50)  # SQL tronqué dans le journal au-delà
 MAX_TAILLE_VALEUR = _entier("MCP_MAX_VALUE_BYTES", 1_000_000, 1000)  # taille max d'une valeur SQL (anti zeroblob)
 BLOQUER_RGPD = _booleen("MCP_BLOQUER_RGPD", defaut=True)  # protégé par défaut
 TABLES_AUTORISEES = {
@@ -176,6 +178,9 @@ def _journaliser(outil, sql, statut, lignes=0, ms=0, erreur=None):
         journal = _logger_journal()
         if journal is None:
             return
+        sql = sql or ""
+        if len(sql) > JOURNAL_SQL_MAX:
+            sql = sql[:JOURNAL_SQL_MAX] + f" ... (+{len(sql) - JOURNAL_SQL_MAX} car.)"
         ligne = {
             "date": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "outil": outil, "statut": statut, "lignes": lignes, "ms": ms, "sql": sql,
@@ -592,9 +597,61 @@ def executer_requete_sql(requete: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Contrôles au démarrage
+# ---------------------------------------------------------------------------
+def verifier_demarrage() -> list:
+    """Vérifie la cohérence base / dictionnaire et renvoie une liste d'avertissements.
+
+    Lève SystemExit si le serveur ne peut pas fonctionner correctement :
+      - base SQLite introuvable ;
+      - blocage RGPD actif alors que le dictionnaire est absent ou vide (rien ne serait
+        protégé : le serveur ne doit pas démarrer en croyant l'être).
+    Le dictionnaire est la source du marquage RGPD : une table ou une colonne qui n'y figure
+    pas ne peut pas être protégée, d'où les avertissements ci-dessous.
+    """
+    if not DB_PATH.is_file():
+        raise SystemExit(f"[démarrage] Base SQLite introuvable : {DB_PATH} (variable SQLITE_DB_PATH).")
+    dico = _dico()
+    if BLOQUER_RGPD and not dico:
+        raise SystemExit(
+            f"[démarrage] Blocage RGPD actif mais dictionnaire absent ou vide ({DICO_PATH}) : "
+            "aucune colonne personnelle ne serait protégée. Corrige DICTIONNAIRE_PATH "
+            "ou désactive explicitement MCP_BLOQUER_RGPD=0.")
+
+    avertissements = []
+    with closing(_connexion()) as con:
+        reelles = {}
+        for table in _tables():
+            reelles[table.lower()] = {r["name"].lower() for r in con.execute(f"PRAGMA table_info({_q(table)})")}
+
+    hors_dico = sorted(t for t in reelles if t not in dico)
+    if hors_dico:
+        avertissements.append(
+            "Tables/vues absentes du dictionnaire (leurs colonnes RGPD ne sont pas repérées) : "
+            + ", ".join(hors_dico))
+    disparues = sorted(t for t in dico if t not in reelles and (not TABLES_AUTORISEES or t in TABLES_AUTORISEES))
+    if disparues:
+        avertissements.append("Tables du dictionnaire absentes de la base : " + ", ".join(disparues))
+    colonnes_inconnues = sorted(
+        f"{t}.{c}" for t, cols in reelles.items() if t in dico
+        for c in cols - {x["nom"].lower() for x in dico[t]["colonnes"]})
+    if colonnes_inconnues:
+        avertissements.append(
+            "Colonnes de la base absentes du dictionnaire (donc non protégées par le blocage RGPD) : "
+            + ", ".join(colonnes_inconnues[:30]) + (" ..." if len(colonnes_inconnues) > 30 else ""))
+    if BLOQUER_RGPD and not any(e["rgpd"] for e in dico.values()):
+        avertissements.append(
+            "Blocage RGPD actif mais aucune colonne marquée RGPD dans le dictionnaire : "
+            "vérifie le format de la colonne « Clés ».")
+    return avertissements
+
+
+# ---------------------------------------------------------------------------
 # Point d'entrée
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
+    for avertissement in verifier_demarrage():
+        print(f"[démarrage] ATTENTION : {avertissement}", file=sys.stderr)
     transport = os.environ.get("MCP_TRANSPORT", "stdio").strip().lower()
     if transport in ("http", "streamable-http"):
         # Attention : aucune authentification. Reste sur 127.0.0.1 sauf réseau de confiance.
