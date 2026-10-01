@@ -49,7 +49,7 @@ DATABASE_PATH = Path(
 
 # Définition du chemin vers le dictionnaire de données (optionnel mais recommandé).
 DICTIONNAIRE_PATH = Path(
-    os.environ.get("DICTIONNAIRE_PATH", "dictionnaire_donnees_bailleur_social.md")
+    os.environ.get("DICTIONNAIRE_PATH", "dictionnaire_donnees_bailleur_social (2).md")
 ).expanduser().resolve()
 
 # Variable globale servant de "cache" pour éviter de relire le fichier texte
@@ -322,7 +322,7 @@ def formuler_reponse(question: str, resultats: dict, log=None) -> str:
         f"Question de l'utilisateur : {question}\n\n"
         f"Résultats de la requête SQL (JSON, aperçu des 20 premières lignes sur {resultats['row_count']}) : "
         f"{json.dumps(apercu, ensure_ascii=False, default=str)}\n\n"
-        "Formule une réponse très courte en français en te basant sur ces résultats. "
+        " Fais 2 paragraphes : Formule une réponse très courte en français en te basant sur ces résultats et donne la traduction en langage naturel de la requête SQL qui à permis de recupérer ces resultats. "
         "RÈGLE STRICTE : NE FAIS PAS de liste détaillée des données. "
         "Si le résultat est un chiffre ou une réponse unique (ex: un total, un compte), donne-le directement. "
         "S'il y a plusieurs lignes, fais uniquement une courte phrase d'introduction globale "

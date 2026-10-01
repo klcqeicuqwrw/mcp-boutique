@@ -140,3 +140,25 @@ def test_dictionnaire_recharge_si_modifie(srv, tmp_path):
     p.write_text(DICO.split("### DWH_Secret")[0], encoding="utf-8")
     os.utime(p, (time.time() + 5, time.time() + 5))
     assert "dwh_secret" not in srv._dico()
+
+
+def test_sortie_markdown_par_defaut(srv):
+    out = asyncio.run(srv.executer_requete_sql("SELECT ville, COUNT(*) AS n FROM DWH_Locataire GROUP BY ville ORDER BY ville"))
+    assert out.startswith("| ville | n |\n|---|---|\n| Lille | 2 |\n| Paris | 1 |")
+    assert "2 ligne(s)" in out
+
+
+def test_sortie_json_sur_demande(srv):
+    out = asyncio.run(srv.executer_requete_sql("SELECT 1 AS a", format="json"))
+    assert json.loads(out)["rows"] == [{"a": 1}]
+
+
+def test_markdown_echappe_les_pipes(srv):
+    out = asyncio.run(srv.executer_requete_sql("SELECT 'a|b' || char(10) || 'c' AS t"))
+    assert "a\\|b c" in out
+
+
+def test_format_invalide(srv):
+    from mcp.server.mcpserver.exceptions import ToolError
+    with pytest.raises(ToolError, match="format"):
+        asyncio.run(srv.executer_requete_sql("SELECT 1", format="xml"))

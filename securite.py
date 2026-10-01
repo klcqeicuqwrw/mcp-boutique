@@ -26,7 +26,7 @@ BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8000").rstrip("/")
 
 # --- Accès en lecture seule à la base métier (bailleur_social.db) --------------------------
 # Base de données métier (stocke les données réelles de l'entreprise)
-DATABASE_PATH = Path(os.environ.get("SQLITE_DB_PATH", "bailleur_social.db")).expanduser().resolve()
+DATABASE_PATH = Path(os.environ.get("SQLITE_DB_PATH", "bailleur_social (2).db")).expanduser().resolve()
 
 
 def _connect_read_only() -> sqlite3.Connection:
