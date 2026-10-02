@@ -26,7 +26,7 @@ BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8000").rstrip("/")
 
 # --- Accès en lecture seule à la base métier (bailleur_social.db) --------------------------
 # Base de données métier (stocke les données réelles de l'entreprise)
-DATABASE_PATH = Path(os.environ.get("SQLITE_DB_PATH", "bailleur_social (2).db")).expanduser().resolve()
+DATABASE_PATH = Path(os.environ.get("SQLITE_DB_PATH", "bailleur_social_test.db")).expanduser().resolve()
 
 
 def _connect_read_only() -> sqlite3.Connection:
@@ -34,7 +34,7 @@ def _connect_read_only() -> sqlite3.Connection:
     if not DATABASE_PATH.is_file():
         raise FileNotFoundError(
             f"Base SQLite introuvable : {DATABASE_PATH}. Lancez le serveur depuis le dossier contenant "
-            "bailleur_social.db ou définissez SQLITE_DB_PATH.")
+            "bailleur_social_test.db ou définissez SQLITE_DB_PATH.")
     # Le paramètre ?mode=ro empêche physiquement toute modification des données
     connection = sqlite3.connect(f"{DATABASE_PATH.as_uri()}?mode=ro", uri=True)
     connection.row_factory = sqlite3.Row

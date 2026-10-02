@@ -8,7 +8,7 @@
       "args": ["${workspaceFolder}/server.py"],
       "cwd": "${workspaceFolder}",
       "env": {
-        "SQLITE_DB_PATH": "${workspaceFolder}/bailleur_social (2).db",
+        "SQLITE_DB_PATH": "${workspaceFolder}/bailleur_social_test.db",
         "MCP_BLOQUER_RGPD": "0",
         "MCP_SQL_TIMEOUT": "20"
       },

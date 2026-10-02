@@ -44,12 +44,12 @@ MAX_ROWS = 500
 # Définition du chemin vers la base de données SQLite. 
 # Path().expanduser().resolve() permet de gérer correctement les chemins (même s'ils sont relatifs).
 DATABASE_PATH = Path(
-    os.environ.get("SQLITE_DB_PATH", "bailleur_social.db")
+    os.environ.get("SQLITE_DB_PATH", "bailleur_social_test.db")
 ).expanduser().resolve()
 
 # Définition du chemin vers le dictionnaire de données (optionnel mais recommandé).
 DICTIONNAIRE_PATH = Path(
-    os.environ.get("DICTIONNAIRE_PATH", "dictionnaire_donnees_bailleur_social (2).md")
+    os.environ.get("DICTIONNAIRE_PATH", "dictionnaire_donnees_bailleur_social_test.md")
 ).expanduser().resolve()
 
 # Variable globale servant de "cache" pour éviter de relire le fichier texte

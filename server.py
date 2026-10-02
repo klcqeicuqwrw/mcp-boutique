@@ -11,8 +11,8 @@ Le dictionnaire de données (fichier .md) est lu et fusionné avec la structure
 réelle de la base : l'assistant voit le sens métier de chaque colonne.
 
 Variables d'environnement (toutes optionnelles) :
-  SQLITE_DB_PATH        chemin de la base            (défaut : bailleur_social (2).db)
-  DICTIONNAIRE_PATH     chemin du dictionnaire .md   (défaut : dictionnaire_donnees_bailleur_social (2).md)
+  SQLITE_DB_PATH        chemin de la base            (défaut : bailleur_social.db)
+  DICTIONNAIRE_PATH     chemin du dictionnaire .md   (défaut : dictionnaire_donnees_bailleur_social.md)
   MCP_MAX_ROWS          lignes max par requête       (défaut : 500)
   MCP_MAX_CHARS         taille max de la réponse     (défaut : 60000 caractères)
   MCP_SQL_TIMEOUT       durée max d'une requête, en secondes (défaut : 20)
@@ -42,7 +42,7 @@ try:  # SDK MCP 2.x
     from mcp.server.mcpserver.exceptions import ToolError
 except ImportError:  # SDK MCP 1.x
     from mcp.server.fastmcp import FastMCP as _Server
-    from mcp.server.fastmcp.exceptions import ToolError
+    from mcp.server import ToolError
 
 try:
     from mcp.types import ToolAnnotations
@@ -77,8 +77,8 @@ def _entier(nom_variable: str, defaut: int, minimum: int = 1) -> int:
         return defaut
 
 
-DB_PATH = _chemin("SQLITE_DB_PATH", "bailleur_social (2).db")
-DICO_PATH = _chemin("DICTIONNAIRE_PATH", "dictionnaire_donnees_bailleur_social (2).md")
+DB_PATH = _chemin("SQLITE_DB_PATH", "bailleur_social_test.db")
+DICO_PATH = _chemin("DICTIONNAIRE_PATH", "dictionnaire_donnees_bailleur_social_test.md")
 MAX_ROWS = _entier("MCP_MAX_ROWS", 500)
 MAX_CHARS = _entier("MCP_MAX_CHARS", 60000, 1000)
 SQL_TIMEOUT = float(_entier("MCP_SQL_TIMEOUT", 20))
