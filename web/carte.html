@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carte du patrimoine</title>
+<!-- Leaflet + regroupement de points (CDN). Pour la souveraineté / un réseau fermé : télécharger ces
+     fichiers dans web/static/vendor/ et remplacer les URL ci-dessous par /static/vendor/... -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+<style>
+  :root { --bleu:#0a7bd1; --gris:#5b6770; --bord:#d8dee4; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; font-family: system-ui, Segoe UI, Arial, sans-serif; color: #1c2430; }
+  body { display: flex; flex-direction: column; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; padding: 10px 16px;
+           border-bottom: 1px solid var(--bord); background: #fff; }
+  header h1 { font-size: 18px; margin: 0; }
+  header a { color: var(--bleu); text-decoration: none; font-weight: 600; }
+  label { font-size: 14px; color: var(--gris); display: flex; align-items: center; gap: 6px; }
+  select, input { font: inherit; padding: 6px 8px; border: 1px solid var(--bord); border-radius: 6px; }
+  #compteur { margin-left: auto; font-size: 14px; color: var(--gris); }
+  #msg { margin: 12px 16px; padding: 10px 14px; border-radius: 6px; background: #fff4e5; border: 1px solid #f0c27a; }
+  #msg.erreur { background: #fdecea; border-color: #f1a9a0; }
+  #carte { flex: 1; min-height: 300px; }
+</style>
+</head>
+<body>
+<header>
+  <a href="/">&larr; Retour</a>
+  <h1>Carte du patrimoine</h1>
+  <label>Niveau <select id="niveau"></select></label>
+  <label>Recherche <input id="recherche" type="search" placeholder="Nom ou commune" autocomplete="off"></label>
+  <span id="compteur" aria-live="polite"></span>
+</header>
+<div id="msg" hidden></div>
+<div id="carte"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script>
+(() => {
+  "use strict";
+
+  // Fond de carte : remplaçable (ex. fonds de l'IGN) en changeant seulement ces deux valeurs.
+  const TUILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+  const ATTRIBUTION = "&copy; contributeurs OpenStreetMap";
+
+  const $ = (id) => document.getElementById(id);
+  const carte = L.map("carte").setView([46.6, 2.5], 6);   // France entière au départ
+  L.tileLayer(TUILES, { maxZoom: 19, attribution: ATTRIBUTION }).addTo(carte);
+  const groupe = L.markerClusterGroup({ chunkedLoading: true });
+  carte.addLayer(groupe);
+
+  let points = [];
+  let ignores = 0;
+
+  // Minuscules sans accents : « Résidence » == « residence »
+  const norm = (t) => String(t ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const niveauDe = (p) => p.niveau || "(non renseigné)";
+
+  function message(texte, erreur) {
+    const m = $("msg");
+    m.textContent = texte;              // textContent : jamais de HTML venant de la base
+    m.className = erreur ? "erreur" : "";
+    m.hidden = !texte;
+  }
+
+  // Contenu de l'infobulle construit avec le DOM (aucun innerHTML => pas de XSS via les données).
+  function infobulle(p) {
+    const d = document.createElement("div");
+    const nom = document.createElement("strong");
+    nom.textContent = p.nom || p.id || "Patrimoine";
+    d.appendChild(nom);
+    d.appendChild(document.createElement("br"));
+    d.appendChild(document.createTextNode(p.commune || ""));
+    const n = document.createElement("div");
+    n.style.color = "#5b6770";
+    n.textContent = niveauDe(p);
+    d.appendChild(n);
+    return d;
+  }
+
+  function afficher() {
+    const niveau = $("niveau").value;
+    const mot = norm($("recherche").value.trim());
+    const visibles = points.filter((p) =>
+      (!niveau || niveauDe(p) === niveau) &&
+      (!mot || norm(p.nom).includes(mot) || norm(p.commune).includes(mot)));
+
+    groupe.clearLayers();
+    groupe.addLayers(visibles.map((p) =>
+      L.circleMarker([p.lat, p.lon], { radius: 7, color: "#fff", weight: 1.5, fillColor: "#0a7bd1", fillOpacity: 0.9 })
+        .bindPopup(infobulle(p))));
+
+    if (visibles.length) carte.fitBounds(groupe.getBounds(), { padding: [30, 30], maxZoom: 13 });
+    $("compteur").textContent = `${visibles.length} site(s) affiché(s) sur ${points.length}` +
+      (ignores ? ` · ${ignores} ignoré(s) (coordonnées invalides)` : "");
+  }
+
+  function remplirNiveaux() {
+    const sel = $("niveau");
+    sel.replaceChildren(new Option("Tous les niveaux", ""));
+    [...new Set(points.map(niveauDe))].sort((a, b) => a.localeCompare(b, "fr"))
+      .forEach((n) => sel.appendChild(new Option(n, n)));
+    // Par défaut : les résidences (sinon la carte est noyée par les bâtiments, cages d'escalier, parkings)
+    const residence = [...sel.options].find((o) => /^residence/.test(norm(o.value)));
+    sel.value = residence ? residence.value : "";
+  }
+
+  async function charger() {
+    message("Chargement…");
+    let r;
+    try {
+      r = await fetch("/api/carte", { credentials: "same-origin", cache: "no-store" });
+    } catch (e) {
+      return message("Serveur injoignable.", true);
+    }
+    if (r.status === 401) { location.href = "/"; return; }
+    if (!r.ok) {
+      let detail = "";
+      try { detail = (await r.json()).detail || ""; } catch (e) { /* réponse non JSON */ }
+      return message(r.status === 403
+        ? "Votre service n'a pas accès aux données du patrimoine. " + detail
+        : "Carte indisponible. " + detail, true);
+    }
+    const data = await r.json();
+    points = data.points || [];
+    ignores = data.ignores || 0;
+    remplirNiveaux();
+    afficher();
+    message(data.tronque ? "Résultat tronqué : seuls les premiers sites sont affichés." :
+            (points.length ? "" : "Aucun site avec des coordonnées exploitables."));
+  }
+
+  let attente;
+  $("niveau").addEventListener("change", afficher);
+  $("recherche").addEventListener("input", () => { clearTimeout(attente); attente = setTimeout(afficher, 200); });
+  charger();
+})();
+</script>
+</body>
+</html>
