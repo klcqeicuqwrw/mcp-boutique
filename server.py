@@ -11,8 +11,8 @@ Le dictionnaire de données (fichier .md) est lu et fusionné avec la structure
 réelle de la base : l'assistant voit le sens métier de chaque colonne.
 
 Variables d'environnement (toutes optionnelles) :
-  SQLITE_DB_PATH        chemin de la base            (défaut : bailleur_social.db)
-  DICTIONNAIRE_PATH     chemin du dictionnaire .md   (défaut : dictionnaire_donnees_bailleur_social.md)
+  SQLITE_DB_PATH        chemin de la base            (défaut : DWH_fictive_10000_lignes.sqlite)
+  DICTIONNAIRE_PATH     chemin du dictionnaire .md   (défaut : Dictionnaire_donnees_DWH_fictive_SQLite.md)
   MCP_MAX_ROWS          lignes max par requête       (défaut : 500)
   MCP_MAX_CHARS         taille max de la réponse     (défaut : 60000 caractères)
   MCP_SQL_TIMEOUT       durée max d'une requête, en secondes (défaut : 20)
@@ -33,6 +33,7 @@ import sys
 import time
 import traceback
 import unicodedata
+import config
 from contextlib import closing
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -58,7 +59,7 @@ BASE_DIR = Path(__file__).resolve().parent
 
 
 def _chemin(nom_variable: str, defaut: str) -> Path:
-    return Path(os.environ.get(nom_variable) or BASE_DIR / defaut).expanduser().resolve()
+    return config.chemin(nom_variable, defaut)
 
 
 def _booleen(nom_variable: str, defaut: bool = False) -> bool:
@@ -77,8 +78,8 @@ def _entier(nom_variable: str, defaut: int, minimum: int = 1) -> int:
         return defaut
 
 
-DB_PATH = _chemin("SQLITE_DB_PATH", "bailleur_social_test.db")
-DICO_PATH = _chemin("DICTIONNAIRE_PATH", "dictionnaire_donnees_bailleur_social_test.md")
+DB_PATH = _chemin("SQLITE_DB_PATH", "DWH_fictive_10000_lignes.sqlite")
+DICO_PATH = _chemin("DICTIONNAIRE_PATH", "Dictionnaire_donnees_DWH_fictive_SQLite.md")
 MAX_ROWS = _entier("MCP_MAX_ROWS", 500)
 MAX_CHARS = _entier("MCP_MAX_CHARS", 60000, 1000)
 SQL_TIMEOUT = float(_entier("MCP_SQL_TIMEOUT", 20))
@@ -195,49 +196,19 @@ def _journaliser(outil, sql, statut, lignes=0, ms=0, erreur=None):
 # ---------------------------------------------------------------------------
 # Dictionnaire de données (fichier .md, découpé par table)
 # ---------------------------------------------------------------------------
-_SECTION = re.compile(r"^### (\S+)[ \t]*$", re.M)
-_LIGNE_COLONNE = re.compile(r"^\|\s*`([^`]+)`\s*\|\s*`([^`]*)`\s*\|([^|]*)\|(.*)\|\s*$")
+from dictionnaire import lire_dictionnaire
+
 _dico_cache = None
 _dico_mtime = None
 
 
 def _dico() -> dict:
-    """{nom_table_minuscule: {theme, description, jointures, colonnes, rgpd}}."""
     global _dico_cache, _dico_mtime
-    mtime = DICO_PATH.stat().st_mtime if DICO_PATH.is_file() else None
-    if _dico_cache is not None and mtime == _dico_mtime:
-        return _dico_cache
-    resultat = {}
-    if DICO_PATH.is_file():
-        texte = DICO_PATH.read_text(encoding="utf-8").replace("\r\n", "\n")
-        sections = list(_SECTION.finditer(texte))
-        for i, m in enumerate(sections):
-            fin = sections[i + 1].start() if i + 1 < len(sections) else len(texte)
-            entree = {"nom": m.group(1), "theme": "", "description": "",
-                      "jointures": "", "colonnes": [], "rgpd": set()}
-            for ligne in texte[m.end():fin].strip().split("\n"):
-                ligne = ligne.strip()
-                if not ligne or ligne.startswith("|---"):
-                    continue
-                col = _LIGNE_COLONNE.match(ligne)
-                if col:
-                    nom, type_, cles, desc = (g.strip() for g in col.groups())
-                    if nom.lower() == "colonne":
-                        continue
-                    entree["colonnes"].append(
-                        {"nom": nom, "type": type_, "cles": cles, "description": desc}
-                    )
-                    if "RGPD" in cles:
-                        entree["rgpd"].add(nom.lower())
-                elif ligne.startswith("*"):
-                    entree["theme"] = ligne.strip("*").split("·")[0].strip()
-                elif ligne.startswith("Jointures"):
-                    entree["jointures"] = ligne
-                elif not entree["description"]:
-                    entree["description"] = ligne
-            resultat[m.group(1).lower()] = entree
-    _dico_cache, _dico_mtime = resultat, mtime
-    return resultat
+    signature = (str(DICO_PATH), DICO_PATH.stat().st_mtime_ns, DICO_PATH.stat().st_size) if DICO_PATH.is_file() else (str(DICO_PATH), None)
+    if _dico_cache is None or signature != _dico_mtime:
+        _dico_cache = lire_dictionnaire(DICO_PATH)
+        _dico_mtime = signature
+    return _dico_cache
 
 
 def _colonnes_rgpd(table: str) -> set:
@@ -670,9 +641,9 @@ def verifier_demarrage() -> list:
             "Colonnes de la base absentes du dictionnaire (donc non protégées par le blocage RGPD) : "
             + ", ".join(colonnes_inconnues[:30]) + (" ..." if len(colonnes_inconnues) > 30 else ""))
     if BLOQUER_RGPD and not any(e["rgpd"] for e in dico.values()):
-        avertissements.append(
-            "Blocage RGPD actif mais aucune colonne marquée RGPD dans le dictionnaire : "
-            "vérifie le format de la colonne « Clés ».")
+        raise SystemExit(
+            "Blocage RGPD actif mais aucune colonne marquée RGPD : "
+            "classe les colonnes dans le dictionnaire avant de démarrer.")
     return avertissements
 
 

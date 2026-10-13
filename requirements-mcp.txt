@@ -1,2 +1,3 @@
 # Serveur MCP uniquement (server.py)
 mcp>=2.0,<3
+python-dotenv

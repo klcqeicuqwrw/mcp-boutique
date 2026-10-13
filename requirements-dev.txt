@@ -1,2 +1,4 @@
 -r requirements-mcp.txt
+-r requirements-web.txt
 pytest
+httpx

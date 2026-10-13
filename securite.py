@@ -5,18 +5,19 @@ réinitialisation de mot de passe, et surtout le filtrage des droits d'accès
 aux données métier pour l'IA.
 """
 import hashlib, hmac, json, os, re, secrets, sqlite3, sys, time
+import config
 from contextlib import closing
 from pathlib import Path
 
 # --- Configuration globale ---
 # Base de données applicative (stocke les utilisateurs, les logs, les discussions)
-APP_DB = Path(os.environ.get("APP_DB_PATH", "app.db")).expanduser().resolve()
+APP_DB = config.chemin("APP_DB_PATH", "app.db")
 # Durée de vie d'une session utilisateur (12 heures)
 SESSION_TTL = 12 * 3600
 # Dictionnaire pour tracker les échecs de connexion (protection anti brute-force)
 _echecs: dict = {}
 # Temps maximum autorisé pour l'exécution d'une requête SQL générée par l'IA
-SQL_TIMEOUT = 5
+SQL_TIMEOUT = 12
 # Durée de validité du cache du schéma de la base de données (60 secondes)
 SCHEMA_TTL = 60
 _schema_cache: dict = {}
@@ -24,9 +25,9 @@ _schema_cache: dict = {}
 BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8000").rstrip("/")
 
 
-# --- Accès en lecture seule à la base métier (bailleur_social.db) --------------------------
+# --- Accès en lecture seule à la base métier (DWH_fictive_10000_lignes.sqlite) --------------------------
 # Base de données métier (stocke les données réelles de l'entreprise)
-DATABASE_PATH = Path(os.environ.get("SQLITE_DB_PATH", "bailleur_social_test.db")).expanduser().resolve()
+DATABASE_PATH = config.chemin("SQLITE_DB_PATH", "DWH_fictive_10000_lignes.sqlite")
 
 
 def _connect_read_only() -> sqlite3.Connection:
@@ -34,7 +35,7 @@ def _connect_read_only() -> sqlite3.Connection:
     if not DATABASE_PATH.is_file():
         raise FileNotFoundError(
             f"Base SQLite introuvable : {DATABASE_PATH}. Lancez le serveur depuis le dossier contenant "
-            "bailleur_social_test.db ou définissez SQLITE_DB_PATH.")
+            "DWH_fictive_10000_lignes.sqlite ou définissez SQLITE_DB_PATH.")
     # Le paramètre ?mode=ro empêche physiquement toute modification des données
     connection = sqlite3.connect(f"{DATABASE_PATH.as_uri()}?mode=ro", uri=True)
     connection.row_factory = sqlite3.Row
@@ -129,6 +130,8 @@ def init_db():
         if "email" not in [r[1] for r in c.execute("PRAGMA table_info(users)")]:
             c.execute("ALTER TABLE users ADD COLUMN email TEXT")
         c.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_email ON users(email)")
+        if "access_scope" not in [r[1] for r in c.execute("PRAGMA table_info(messages)")]:
+            c.execute("ALTER TABLE messages ADD COLUMN access_scope TEXT")
         c.execute("CREATE TABLE IF NOT EXISTS resets(token_hash TEXT PRIMARY KEY, "
                   "user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires REAL NOT NULL)")
 
@@ -210,7 +213,7 @@ def login(username, password):
     now = time.time()
     # Récupère l'historique récent des échecs pour cet utilisateur
     tentatives = [t for t in _echecs.get(username, []) if now - t < 300]
-    if len(tentatives) >= 5:
+    if len(tentatives) >= 10:
         raise PermissionError("Trop de tentatives. Réessayez dans quelques minutes.")
 
     u = q("SELECT * FROM users WHERE username=? AND active=1", (username,), one=True)
@@ -331,6 +334,78 @@ def allowed_for(user):
             for r in rows}
 
 
+def access_scope(user):
+    """Empreinte des droits utilisés pour produire un résultat et son contexte IA."""
+    allowed = allowed_for(user)
+    droits = None if allowed is None else {t: sorted(cols) if cols is not None else None
+                                           for t, cols in sorted(allowed.items())}
+    payload = [str(DATABASE_PATH), user["role"], user["service_id"], droits]
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+
+
+def message_accessible(message, user):
+    scope = message.get("access_scope")
+    if scope:
+        return hmac.compare_digest(scope, access_scope(user))
+    # Compatibilité des conversations créées avant l'ajout des empreintes.
+    # Les routes vérifient toujours que le message appartient à l'utilisateur.
+    if user["role"] == "admin":
+        return True
+    sql = message.get("sql") or message.get("sql_genere")
+    if not sql:
+        return not message.get("resultats") and not message.get("reponse")
+    try:
+        sql = _validate_read_query(sql)
+        with closing(_connect_read_only()) as c:
+            c.setlimit(sqlite3.SQLITE_LIMIT_SQL_LENGTH, 100_000)
+            c.set_authorizer(_authorizer(allowed_for(user)))
+            # Compile sans exécuter la requête ni recalculer les résultats archivés.
+            c.execute("EXPLAIN " + sql)
+        return True
+    except (sqlite3.Error, ValueError, OSError):
+        return False
+
+
+def lire_resultats(texte):
+    """Valide un tableau sauvegardé pour éviter qu'un JSON abîmé casse la conversation."""
+    try:
+        r = json.loads(texte)
+    except (ValueError, TypeError) as exc:
+        raise ValueError("Résultat enregistré illisible. Reposez la question pour le régénérer.") from exc
+    if (not isinstance(r, dict) or not isinstance(r.get("columns"), list)
+            or not all(isinstance(c, str) for c in r["columns"])
+            or not isinstance(r.get("rows"), list)
+            or not all(isinstance(row, dict) for row in r["rows"])):
+        raise ValueError("Format du résultat enregistré invalide. Reposez la question.")
+    r["row_count"] = len(r["rows"])
+    r["truncated"] = bool(r.get("truncated", False))
+    return r
+
+
+def scope_actuel(user, scope):
+    actuel = q("SELECT * FROM users WHERE id=? AND active=1", (user["id"],), one=True)
+    return bool(actuel) and hmac.compare_digest(scope, access_scope(actuel))
+
+
+def remplacer_permissions(service_id, droits):
+    """Valide tout avant de remplacer les permissions dans une seule transaction."""
+    connues = tables_info()
+    noms = set()
+    for droit in droits:
+        if droit.table in noms:
+            raise ValueError(f"Table en double : {droit.table}")
+        noms.add(droit.table)
+        if droit.table not in connues or (droit.columns and not set(droit.columns) <= set(connues[droit.table])):
+            raise ValueError(f"Table ou colonne inconnue : {droit.table}")
+    with closing(sqlite3.connect(APP_DB, timeout=10)) as c, c:
+        c.execute("PRAGMA foreign_keys=ON")
+        if not c.execute("SELECT 1 FROM services WHERE id=?", (service_id,)).fetchone():
+            raise ValueError("Service introuvable")
+        c.execute("DELETE FROM permissions WHERE service_id=?", (service_id,))
+        c.executemany("INSERT INTO permissions VALUES(?,?,?)", [
+            (service_id, d.table, json.dumps(d.columns) if d.columns else None) for d in droits])
+
+
 def _authorizer(allowed):
     """
     Génère un Callback (fonction de contrôle) pour le moteur SQLite.
@@ -354,7 +429,9 @@ def _authorizer(allowed):
             # Si des colonnes spécifiques sont définies, on vérifie que la colonne cible (a2) est autorisée
             return sqlite3.SQLITE_OK if (cols is None or not a2 or a2.lower() in cols) else sqlite3.SQLITE_DENY
 
-        if action in (sqlite3.SQLITE_SELECT, sqlite3.SQLITE_FUNCTION, sqlite3.SQLITE_RECURSIVE):
+        if action == sqlite3.SQLITE_FUNCTION:
+            return sqlite3.SQLITE_DENY if (a2 or "").lower() in {"load_extension", "readfile", "writefile"} else sqlite3.SQLITE_OK
+        if action in (sqlite3.SQLITE_SELECT, sqlite3.SQLITE_RECURSIVE):
             return sqlite3.SQLITE_OK
         return sqlite3.SQLITE_DENY
     return check
@@ -401,11 +478,15 @@ def _schema_text_brut(allowed):
             # Filtre les colonnes interdites
             info = [f"{r[1]} {r[2]}" for r in c.execute(f'PRAGMA table_info("{t}")')
                     if cols is None or r[1].lower() in cols]
+            if not info:
+                continue
             ligne = f"{t}({', '.join(info)})"
 
             # Récupère et filtre les relations (clés étrangères)
             fks = [f"{r[3]}->{r[2]}.{r[4]}" for r in c.execute(f'PRAGMA foreign_key_list("{t}")')
-                   if allowed is None or r[2].lower() in allowed]
+                   if allowed is None or (r[2].lower() in allowed
+                       and (cols is None or r[3].lower() in cols)
+                       and (allowed[r[2].lower()] is None or r[4].lower() in allowed[r[2].lower()]))]
             lignes.append(ligne + (" FK: " + ", ".join(fks) if fks else ""))
     return "\n".join(lignes)
 
@@ -418,12 +499,14 @@ def run_query(user, sql, max_rows=500):
     sql = _validate_read_query(sql) # Vérifie d'abord que c'est un SELECT
 
     with closing(_connect_read_only()) as c:
+        c.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, 1_000_000)
+        c.setlimit(sqlite3.SQLITE_LIMIT_SQL_LENGTH, 100_000)
         # Applique la politique de sécurité de l'utilisateur à la connexion SQLite
         c.set_authorizer(_authorizer(allowed_for(user)))
 
         # Définit un délai d'exécution max (timeout) pour éviter qu'une requête IA mal optimisée ne bloque le serveur
-        deadline = time.time() + SQL_TIMEOUT
-        c.set_progress_handler(lambda: 1 if time.time() > deadline else 0, 100000)
+        deadline = time.monotonic() + SQL_TIMEOUT
+        c.set_progress_handler(lambda: 1 if time.monotonic() > deadline else 0, 10000)
 
         try:
             cur = c.execute(sql)

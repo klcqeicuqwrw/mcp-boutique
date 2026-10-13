@@ -3,4 +3,7 @@ fastapi
 uvicorn
 pydantic
 google-genai
+httpx
 python-dotenv
+reportlab
+openpyxl
