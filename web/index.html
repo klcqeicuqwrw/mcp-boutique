@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Assistant Boutique</title>
+<title>Toutat'IS — Assistant de données</title>
 <style>
 :root{--acc:#4f46e5;--bd:#e5e5e8;--mut:#7a7a85;--side:#1e1e2e}
 *{box-sizing:border-box}body{margin:0;font:15px -apple-system,"Segoe UI",Roboto,sans-serif;color:#1f1f28;background:#f7f7f8;display:flex;height:100vh;overflow:hidden}
@@ -36,8 +36,8 @@ th,td{border:1px solid var(--bd);padding:6px 10px;text-align:left}th{background:
   order: -1 !important;
 }
 </style>
-<link rel="stylesheet" href="/static/theme.css?v=20261014-ui-3">
-<link rel="icon" href="/static/icon.png"></head><body>
+<link rel="stylesheet" href="/static/theme.css?v=20261014-toutatis-2">
+<link rel="icon" type="image/svg+xml" href="/static/toutatis.svg"></head><body>
 
 <div id="side"><div class="brand"><img src="/static/logo.png" alt="Aiguillon Construction"></div>
 <button class="n" id="new">+ Nouvelle conversation</button>
@@ -45,6 +45,7 @@ th,td{border:1px solid var(--bd);padding:6px 10px;text-align:left}th{background:
 <div id="who"><span id="me" class="chip"></span><a id="adm" class="sb" href="/admin" hidden>Administration</a>
 <button id="pw" class="sb alt">Changer mon mot de passe</button><button id="out" class="sb dark">Se déconnecter</button></div></div>
 <div id="main">
+<nav class="workspace-nav" aria-label="Outils collaborateurs"><span class="app-brand"><img src="/static/toutatis.svg" width="30" height="30" alt=""><span>Toutat'<b>IS</b></span></span><button type="button" id="tasks-open">À traiter</button><button type="button" id="favorites-open">★ Mes recherches</button></nav>
 <div id="thread"></div>
 <div id="bar"><div class="model-switch" role="radiogroup" aria-label="Choix du modèle IA">
 <input type="radio" name="model" id="model-gemini" value="gemini" checked><label for="model-gemini">Gemini</label>
@@ -67,7 +68,7 @@ async function api(path,method='GET',body){
 async function start(){
   try{const me=await api('/api/me');
     $('me').textContent=me.username+(me.service?' · '+me.service:'');$('adm').hidden=me.role!=='admin';
-    convs=await api('/api/conversations');await ouvrir(convs[0]?.id||null)}catch{}}
+    convs=await api('/api/conversations');await ouvrir(convs[0]?.id||null)}catch(x){$('thread').textContent=x.message}}
 // Les conversations arrivent sans leurs messages (liste légère) : on les charge à l'ouverture.
 async function charger(c){if(c.messages)return;const d=await api('/api/conversations/'+c.id);c.messages=d.messages}
 async function ouvrir(id){cur=id;hist();const c=conv();
@@ -94,7 +95,7 @@ let tRech;$('s').oninput=()=>{clearTimeout(tRech);tRech=setTimeout(hist,200)};
 $('cr').onchange=$('ct').onchange=e=>{if(!$('cr').checked&&!$('ct').checked)(e.target===$('cr')?$('ct'):$('cr')).checked=true};
 function bienvenue(){
   const exemples=[['Patrimoine','Les logements avec un DPE F ou G'],['Localisation','Localise les logements par commune'],['Analyse','Le nombre de logements par commune']];
-  $('thread').innerHTML=`<div class="welcome"><span class="welcome-mark" aria-hidden="true">✦</span><p class="welcome-eyebrow">VOTRE ASSISTANT BOUTIQUE</p><h1>Que souhaitez-vous explorer ?</h1><p>Interrogez vos données et donnez vie à vos résultats.</p><div class="suggestions">${exemples.map(([titre,q])=>`<button type="button" class="suggestion" data-question="${esc(q)}"><strong>${titre}<span aria-hidden="true">↗</span></strong><span>${esc(q)}</span></button>`).join('')}</div><small>Choisissez une suggestion ou écrivez votre propre question.</small></div>`;
+  $('thread').innerHTML=`<div class="welcome"><div class="welcome-identity" role="img" aria-label="Toutat'IS, assistant immobilier"><img src="/static/toutatis.svg" width="140" height="140" alt=""><p class="welcome-wordmark" aria-hidden="true">Toutat'<span>IS</span></p></div><h1>Que souhaitez-vous explorer ?</h1><p>Interrogez vos données et donnez vie à vos résultats.</p><div class="welcome-shortcuts"><button type="button" onclick="ouvrirTaches()">Voir les dossiers à traiter ↗</button><button type="button" onclick="ouvrirFavoris()">Retrouver mes recherches ★</button></div><div class="suggestions">${exemples.map(([titre,q])=>`<button type="button" class="suggestion" data-question="${esc(q)}"><strong>${titre}<span aria-hidden="true">↗</span></strong><span>${esc(q)}</span></button>`).join('')}</div><small>Choisissez une suggestion ou écrivez votre propre question.</small></div>`;
   document.querySelectorAll('.suggestion').forEach(b=>b.onclick=()=>{$('q').value=b.dataset.question;$('q').focus()});
 }
 function thread(){const t=$('thread');t.innerHTML='';const c=conv();
@@ -176,4 +177,4 @@ $('f').onsubmit=async e=>{e.preventDefault();const q=$('q').value.trim();if(!q||
     .catch(x=>{m.attente=false;majTexte(node,'(Réponse texte indisponible : '+x.message+')')})
   }catch(x){bubble('a e',esc(x.message))}
   finally{sending=false;$('send').disabled=false;$('send').innerHTML='Envoyer <span aria-hidden="true">↑</span>';$('q').disabled=false;$('thread').setAttribute('aria-busy','false');$('q').focus()}};
-</script><script src="/static/actions.js?v=20261014-ui-3"></script><script>start();</script></body></html>
+</script><script src="/static/actions.js?v=20261014-espace-2"></script><script src="/static/espace.js?v=20261014-espace-2"></script><script>start();</script></body></html>

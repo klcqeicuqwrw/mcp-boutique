@@ -1,7 +1,8 @@
 'use strict';
 
 function libelleColonne(colonne){
-  return ({Prenom:'Prénom',Age:'Âge',Residence:'Résidence',Etage:'Étage',Dernier_contact:'Dernier contact',Telephone:'Téléphone',Raison_sociale:'Raison sociale',Type_client:'Type de client',Nombre_lots:'Lots'})[colonne]||colonne.replaceAll('_',' ');
+  const noms={Prenom:'Prénom',Age:'Âge',Residence:'Résidence',Etage:'Étage',Dernier_contact:'Dernier contact',Telephone:'Téléphone',Raison_sociale:'Raison sociale',Type_client:'Type de client',Nombre_lots:'Lots',Nom_prenom_client:'Client',Libelle_type_client:'Type de client',Libelle_activite_client:'Activité',Indicateur_statut_presence:'Présence',Raison_sociale_occupant:'Raison sociale',Nom_occupant:'Nom',Prenom_occupant:'Prénom',Type_personne:'Type de personne',Telephone_occupant:'Téléphone',Mail_occupant:'E-mail',Libelle_patrimoine:'Résidence',Libelle_commune:'Commune',Code_postal:'Code postal',Adresse_complete:'Adresse',Libelle_type_lot:'Type de logement',Libelle_usage_lot:'Usage',Surface_habitable:'Surface (m²)',Libelle_etat_actuel:'État',Libelle_objet_affaire:'Objet',Libelle_etat_affaire:'État',Date_ouverture:'Ouverture',Date_theorique_cloture:'Clôture prévue',Code_collaborateur_suivi:'Responsable du suivi',Numero_commande:'Commande',Libelle_objet_commande_1:'Objet',Libelle_tiers:'Prestataire',Taux_execution_commande:'Exécution (%)',Date_fin_execution_commande:'Fin prévue',Montant_TTC:'Montant TTC (€)',Libelle_diagnostic:'Diagnostic',Famille_diagnostic:'Famille',Date_fin_diagnostic:'Échéance',Indicateur_diagnostic_perime:'Périmé',Nom_prenom_collaborateur:'Collaborateur',Libelle_fonction:'Fonction',Mail_collaborateur:'E-mail',Nom_copropriete:'Copropriété',Nom_syndic:'Syndic',Etat_mandat_copropriete:'État du mandat',Date_fin_mandat_copropriete:'Fin du mandat',Tel_syndic:'Téléphone',Mail_syndic:'E-mail',Annee_mois:'Mois',Montant_impaye:'Impayé',Montant_loyer:'Loyer',Montant_charges:'Charges',Montant_paiement_moins_remboursement:'Paiements nets',Libelle_procedure:'Procédure',Libelle_etape_procedure:'Étape',Date_prescription:'Prescription',Date_reception_preavis:'Préavis reçu',Date_fin_occupation_lot:'Fin d’occupation',Indicateur_occupation_active:'Occupation',Libelle_type_bail:'Type de bail'};
+  return noms[colonne]||colonne.replaceAll('_',' ');
 }
 
 function boutonAction(titre,icone,primaire=false){
@@ -35,6 +36,7 @@ function preparerMessage(type,destinataire,objet,corps,url){
 
 function ajouterActions(node,message){
   const resultat=message.resultats;if(!resultat)return;
+  ajouterOutilsResultat(node,message);
   if(message.id&&resultat.localisation_demandee===true){
     const bouton=boutonAction('Localiser les résultats','carte',true);
     bouton.onclick=()=>window.open('/carte?message_id='+encodeURIComponent(message.id),'_blank','noopener');
@@ -42,20 +44,26 @@ function ajouterActions(node,message){
   }
   const table=node.querySelector('table');if(!table)return;
   const norm=c=>c.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z]/g,'');
-  const emailCol=resultat.columns.find(c=>['email','mailoccupant','mailclient','mailsyndic','mailtiers','mail'].includes(norm(c)));
-  const telCol=resultat.columns.find(c=>['telephone','telephoneoccupant','telephoneclient','tel','numerotelephone'].includes(norm(c)));
-  if(!emailCol&&!telCol)return;
+  const emailCols=resultat.columns.filter(c=>['email','mailoccupant','mailclient','mailsyndic','mailtiers','mailcollaborateur','mail'].includes(norm(c)));
+  const telCols=resultat.columns.filter(c=>['telephone','telephoneoccupant','telephoneclient','telephonefixetiers','telephoneportabletiers','telsyndic','tel','numerotelephone'].includes(norm(c)));
+  if(!emailCols.length&&!telCols.length)return;
   const th=document.createElement('th');th.textContent='Contacter';table.querySelector('thead tr').appendChild(th);
   [...table.querySelectorAll('tbody tr')].forEach((tr,i)=>{
     const row=resultat.rows[i],td=document.createElement('td');td.className='contact-cell';
+    const emailCol=emailCols.find(c=>/^[^\s@<>\r\n]+@[^\s@<>\r\n]+\.[^\s@<>\r\n]+$/.test(String(row[c]??'').trim()));
+    const telCol=telCols.find(c=>/^[+\d\s().-]+$/.test(String(row[c]??'').trim())&&/^\+?\d{8,15}$/.test(String(row[c]).replace(/[^+\d]/g,'')));
     const email=String(row[emailCol]??'').trim(),brutTel=String(row[telCol]??'').trim();
     const tel=/^[+\d\s().-]+$/.test(brutTel)?brutTel.replace(/[^+\d]/g,''):'';
-    const morale=resultat.columns.some(c=>norm(c)==='raisonsociale');
+    const morale=resultat.columns.some(c=>norm(c).startsWith('raisonsociale'))||String(row.Type_personne||row.Libelle_type_client||'').toLowerCase().includes('morale');
     const corps=morale?'Bonjour,\n\nNous souhaitons faire un point avec votre structure concernant les locaux que vous occupez. Pourriez-vous contacter votre interlocuteur habituel chez Aiguillon ?\n\nBien cordialement,\nVotre équipe de proximité':'Bonjour,\n\nNous souhaitons prendre de vos nouvelles et vérifier si vous avez besoin d’un accompagnement. Pourriez-vous contacter votre interlocuteur habituel chez Aiguillon ?\n\nBien cordialement,\nVotre équipe de proximité';
     if(/^[^\s@<>\r\n]+@[^\s@<>\r\n]+\.[^\s@<>\r\n]+$/.test(email)){
       const objet=morale?'Prise de contact — votre équipe de proximité':'Prise de nouvelles — votre équipe de proximité';
-      const bouton=boutonAction('Mail','mail');
-      bouton.onclick=()=>preparerMessage('email',email,objet,corps,'mailto:'+encodeURIComponent(email));td.appendChild(bouton);
+      const prestataire=norm(emailCol)==='mailtiers',collegue=norm(emailCol)==='mailcollaborateur';
+      const bouton=boutonAction(prestataire?'Relancer le prestataire':collegue?'Contacter le collègue':'Mail','mail');
+      const reference=row.Numero_commande||row.ID_commande||message.reference||'';
+      const sujet=prestataire?'Suivi de commande '+reference:collegue?'Suivi du dossier '+reference:objet;
+      const contenu=prestataire?`Bonjour,\n\nPouvez-vous nous informer de l’avancement de la commande ${reference} ?\nObjet : ${row.Libelle_objet_commande_1||'à préciser'}\nFin prévue : ${row.Date_fin_execution_commande||'à préciser'}\n\nMerci de nous confirmer les prochaines étapes.\n\nBien cordialement`:collegue?`Bonjour,\n\nJe souhaite faire un point sur le dossier ${reference}.\nPourrais-tu me recontacter à ce sujet ?\n\nMerci`:corps;
+      bouton.onclick=()=>preparerMessage('email',email,sujet,contenu,'mailto:'+encodeURIComponent(email));td.appendChild(bouton);
     }
     if(/^\+?\d{8,15}$/.test(tel)){
       const appel=boutonAction('Appel','telephone');appel.onclick=()=>{location.href='tel:'+tel;};td.appendChild(appel);

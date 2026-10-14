@@ -119,6 +119,10 @@ def init_db():
         CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY,
             conv_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
             question TEXT, reponse TEXT, sql TEXT, resultats TEXT, erreur TEXT, created_at REAL NOT NULL);
+        CREATE TABLE IF NOT EXISTS favorite_searches(id INTEGER PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            label TEXT NOT NULL, question TEXT NOT NULL, created_at REAL NOT NULL,
+            UNIQUE(user_id, question));
         CREATE TABLE IF NOT EXISTS query_log(id INTEGER PRIMARY KEY, user_id INTEGER, username TEXT,
             question TEXT, sql TEXT, status TEXT, row_count INTEGER, duration_ms INTEGER, created_at REAL);
         CREATE TABLE IF NOT EXISTS gemini_log(id INTEGER PRIMARY KEY, user_id INTEGER, username TEXT,

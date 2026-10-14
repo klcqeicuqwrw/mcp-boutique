@@ -1,5 +1,32 @@
 # Assistant de données métier — mcp-boutique
 
+Le chat propose un espace collaborateur : **À traiter** regroupe les affaires en
+retard, commandes à relancer, diagnostics à renouveler, préavis, mandats de syndic
+et comptes à examiner. La date de référence est modifiable ; les dates des données
+sont affichées. Les calculs sont locaux, sans appel à une IA. Le suivi des impayés
+retient le dernier mois disponible de chaque client à la date choisie.
+
+Dans les tableaux, les identifiants disponibles ouvrent les fiches client,
+logement, résidence, affaire, commande, diagnostic, occupant et copropriété dans
+un panneau. Les rubriques liées, documents et contacts dépendent des droits du
+service. Les fiches client regroupent baux, occupants, logements, affaires,
+historiques de compte et procédures ; une courbe peut afficher l'évolution du
+compte (Chart.js, avec le tableau conservé en cas d'indisponibilité).
+
+Les boutons IKOS/GED utilisent les liens de la base : les adresses fictives ne
+garantissent pas l'accès à un outil réel. **Voir sur la carte** ouvre la page `/carte`
+de l'application, filtrée sur les résidences liées à la fiche. Leaflet affiche les
+points sur un fond OpenStreetMap ; les droits sont revérifiés par `/api/carte`.
+Les anciens liens d'itinéraire redirigent également vers cette carte. Les relances prestataire
+et contacts collègues préparent un brouillon à relire et envoyer dans sa messagerie.
+**Enregistrer la recherche** sauvegarde la question dans les favoris personnels,
+accessibles par **Mes recherches**. Relancer un favori applique les droits actuels
+et le fournisseur sélectionné ; aucun résultat métier n'est conservé dans le favori.
+
+Après une mise à jour du code Python, relancer le serveur pour enregistrer les
+nouvelles routes et migrer automatiquement la base applicative (table des favoris).
+Tests dédiés : `python -m pytest test_espace.py -q`.
+
 Application FastAPI pour interroger une base SQLite en français avec Gemini,
 ou OpenAI, au choix dans le chat.
 Elle propose un chat, des tableaux, graphiques, exports, une carte du patrimoine

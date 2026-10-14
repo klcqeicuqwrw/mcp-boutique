@@ -92,11 +92,13 @@
       (!mot || norm(p.nom).includes(mot) || norm(p.commune).includes(mot)));
 
     groupe.clearLayers();
-    groupe.addLayers(visibles.map((p) =>
+    const marqueurs = visibles.map((p) =>
       L.circleMarker([p.lat, p.lon], { radius: 7, color: "#fff", weight: 1.5, fillColor: "#0a7bd1", fillOpacity: 0.9 })
-        .bindPopup(infobulle(p))));
+        .bindPopup(infobulle(p)));
+    groupe.addLayers(marqueurs);
 
     if (visibles.length) carte.fitBounds(groupe.getBounds(), { padding: [30, 30], maxZoom: 13 });
+    if (marqueurs.length === 1) marqueurs[0].openPopup();
     $("compteur").textContent = `${visibles.length} site(s) affiché(s) sur ${points.length}` +
       (ignores ? ` · ${ignores} ignoré(s) (coordonnées invalides)` : "");
   }
@@ -116,8 +118,11 @@
     message("Chargement…");
     let r;
     try {
-      const message = new URLSearchParams(location.search).get('message_id');
-      const url = message && /^\d+$/.test(message) ? '/api/carte?message_id='+encodeURIComponent(message) : '/api/carte';
+      const selection = new URLSearchParams(location.search), filtres = new URLSearchParams();
+      for (const cle of ['message_id','type_entite','identifiant','latitude','longitude']) {
+        if (selection.has(cle)) filtres.set(cle, selection.get(cle));
+      }
+      const url = '/api/carte' + (filtres.size ? '?' + filtres.toString() : '');
       r = await fetch(url, { credentials: "same-origin", cache: "no-store" });
     } catch (e) {
       return message("Serveur injoignable.", true);
