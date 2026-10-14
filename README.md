@@ -1,6 +1,7 @@
 # Assistant de données métier — mcp-boutique
 
-Application FastAPI pour interroger une base SQLite en français avec Gemini.
+Application FastAPI pour interroger une base SQLite en français avec Gemini,
+ou OpenAI, au choix dans le chat.
 Elle propose un chat, des tableaux, graphiques, exports, une carte du patrimoine
 et une administration des utilisateurs et des permissions. Un serveur MCP local
 permet également de consulter la base depuis un assistant compatible.
@@ -22,7 +23,15 @@ une seule fois dans le terminal lors de la création du premier administrateur.
 La clé Gemini n'est nécessaire qu'au premier appel IA ; les pages et les tests
 peuvent démarrer sans clé.
 
-La base de démonstration `DWH_fictive_10000_lignes.sqlite` et son dictionnaire
+Les comptages simples et autonomes (« Combien de clients distincts y a-t-il ? »,
+« Nombre total de lots ») sont exécutés directement en SQL, avec les mêmes droits.
+Les listes et chiffres reçoivent une phrase de présentation locale ; le choix
+des graphiques est également local. Les demandes explicites d'analyse,
+d'explication ou de comparaison conservent la synthèse du fournisseur choisi. Les questions
+filtrées et les suites de conversation conservent la génération SQL par le fournisseur choisi.
+Cela réduit les appels réseau et l'exposition aux ralentissements du fournisseur.
+
+La base fictive `DWH_fictive_10000_lignes.sqlite` et son dictionnaire
 `Dictionnaire_donnees_DWH_fictive_SQLite.md` doivent être présents à la racine.
 Les chemins personnalisés se configurent dans `.env`. Lancer les commandes
 depuis la racine ; les chemins relatifs des bases sont résolus depuis la racine du projet.
@@ -40,6 +49,24 @@ ne peut consulter aucune table. `/health` expose seulement l'état HTTP.
 
 Voir `.env.example` pour les noms des variables, sans secrets. Ne jamais publier
 `.env`, `app.db` ni les bases métier contenant des données réelles.
+
+Le chat propose une pastille coulissante Gemini / OpenAI et conserve le choix
+sur ce navigateur. Chaque demande utilise uniquement le fournisseur choisi,
+y compris pour la synthèse d'analyse. Aucun secours automatique n'est effectué,
+même en cas d'erreur ou de résultat vide. Les caches SQL sont séparés par fournisseur.
+Les comptages simples et les synthèses simples restent locaux.
+
+Renseigner `GEMINI_API_KEY` pour Gemini ou `OPENAI_API_KEY` pour OpenAI dans
+`.env`, puis redémarrer le serveur. Ne pas coller les clés dans le chat.
+`OPENAI_MODEL` vaut `gpt-4.1-mini` par défaut. OpenAI utilise l'API Responses,
+des sorties SQL structurées et `store=False`.
+`GEMINI_TIMEOUT_SECONDS` vaut 20 secondes par défaut et
+`OPENAI_TIMEOUT_SECONDS` vaut 30 secondes. Les retries automatiques sont désactivés.
+Une erreur indique le fournisseur concerné ; les permissions restent appliquées.
+
+Les modèles, tokens et erreurs figurent dans le journal IA existant
+(`gemini_log`). Les appels OpenAI portent le préfixe `openai/`.
+Seuls les schémas et historiques autorisés sont transmis au fournisseur choisi.
 
 - `SQLITE_DB_PATH` : base métier, ouverte exclusivement en lecture seule.
 - `DICTIONNAIRE_PATH` : définitions métier et classification des colonnes sensibles.
@@ -135,8 +162,23 @@ d'erreur. Elle est prévue pour le schéma DWH fourni et n'est pas lancée par p
 - `boutique/dependencies.py` : contrôles de session, CSRF et rôle administrateur.
 - `boutique/auth.py`, `chat.py`, `exports.py`, `admin.py`, `pages.py` : routes par fonction.
 - `boutique/graphiques.py` : sélection des graphiques.
-- `api.py` : client Gemini, génération SQL et synthèse.
+- `api.py` : clients Gemini/OpenAI, génération SQL et synthèse.
 - `dictionnaire.py` : parsing partagé et construction du contexte métier filtré.
 - `securite.py` : comptes, sessions, droits, exécution SQL et journaux.
 - `server.py` : outils MCP et protections propres à ce transport.
 - `web/` : interface HTML/CSS/JavaScript.
+
+## Carte et contacts
+
+La carte est proposée uniquement lorsqu’une localisation est demandée dans le
+chat (par exemple « Localise ces résultats » ou « Affiche les logements sur une
+carte »). Une demande portant sur les derniers résultats réutilise la sélection
+sans nouvel appel IA. Les identifiants de patrimoine, lot, client ou occupant
+permettent de retrouver les sites, avec contrôle des permissions et de la
+propriété de la conversation. Les coordonnées de la base fictive sont réparties
+approximativement dans les communes ; elles ne représentent pas les adresses
+exactes des résidences. Une sauvegarde précède leur mise à jour.
+
+Les boutons E-mail et SMS préparent un brouillon modifiable, puis ouvrent la
+messagerie du collaborateur. Le bouton Appeler ouvre son gestionnaire d’appels.
+Aucun message n’est envoyé automatiquement.

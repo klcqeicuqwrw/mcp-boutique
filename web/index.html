@@ -36,7 +36,7 @@ th,td{border:1px solid var(--bd);padding:6px 10px;text-align:left}th{background:
   order: -1 !important;
 }
 </style>
-<link rel="stylesheet" href="/static/theme.css">
+<link rel="stylesheet" href="/static/theme.css?v=20261014-ui-3">
 <link rel="icon" href="/static/icon.png"></head><body>
 
 <div id="side"><div class="brand"><img src="/static/logo.png" alt="Aiguillon Construction"></div>
@@ -44,14 +44,20 @@ th,td{border:1px solid var(--bd);padding:6px 10px;text-align:left}th{background:
 <input id="s" placeholder="Rechercher une conversation ou une question…" autocomplete="off"><div id="hist"></div>
 <div id="who"><span id="me" class="chip"></span><a id="adm" class="sb" href="/admin" hidden>Administration</a>
 <button id="pw" class="sb alt">Changer mon mot de passe</button><button id="out" class="sb dark">Se déconnecter</button></div></div>
-<div id="main"><div id="thread"></div>
-<div id="bar"><div id="opt"><label><input type="checkbox" id="cr" checked> Réponse texte</label><label><input type="checkbox" id="ct" checked> Tableau</label></div>
-<form id="f"><input id="q" placeholder="Ex : Quels sont mes clients VIP ?" autocomplete="off" required>
-<button class="btn">Envoyer</button></form></div></div>
+<div id="main">
+<div id="thread"></div>
+<div id="bar"><div class="model-switch" role="radiogroup" aria-label="Choix du modèle IA">
+<input type="radio" name="model" id="model-gemini" value="gemini" checked><label for="model-gemini">Gemini</label>
+<input type="radio" name="model" id="model-openai" value="openai"><label for="model-openai">OpenAI</label><span class="model-slider" aria-hidden="true"></span>
+</div><div id="opt"><label><input type="checkbox" id="cr" checked> Réponse texte</label><label><input type="checkbox" id="ct" checked> Tableau</label></div>
+<form id="f"><input id="q" aria-label="Votre question" placeholder="Ex : Les logements avec un DPE F ou G" autocomplete="off" required>
+<button class="btn" id="send">Envoyer <span aria-hidden="true">↑</span></button></form><div class="composer-hint">Une question, un tableau, une nouvelle perspective.</div></div></div>
 <script>
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let convs=[],cur=null;
+let convs=[],cur=null,sending=false;
+try{if(localStorage.getItem('fournisseur-ia')==='openai')$('model-openai').checked=true}catch{}
+document.querySelectorAll('input[name="model"]').forEach(input=>input.onchange=()=>{try{localStorage.setItem('fournisseur-ia',input.value)}catch{}});
 async function api(path,method='GET',body){
   const r=await fetch(path,{method,headers:{'Content-Type':'application/json','X-Requested-With':'fetch'},body:body&&JSON.stringify(body)});
   const d=await r.json().catch(()=>({}));
@@ -86,8 +92,13 @@ function hist(){$('hist').innerHTML='';const t=$('s').value.trim().toLowerCase()
   $('hist').appendChild(d)});if(t&&!n)$('hist').innerHTML='<div class="h" style="cursor:default">Aucun résultat</div>'}
 let tRech;$('s').oninput=()=>{clearTimeout(tRech);tRech=setTimeout(hist,200)};
 $('cr').onchange=$('ct').onchange=e=>{if(!$('cr').checked&&!$('ct').checked)(e.target===$('cr')?$('ct'):$('cr')).checked=true};
+function bienvenue(){
+  const exemples=[['Patrimoine','Les logements avec un DPE F ou G'],['Localisation','Localise les logements par commune'],['Analyse','Le nombre de logements par commune']];
+  $('thread').innerHTML=`<div class="welcome"><span class="welcome-mark" aria-hidden="true">✦</span><p class="welcome-eyebrow">VOTRE ASSISTANT BOUTIQUE</p><h1>Que souhaitez-vous explorer ?</h1><p>Interrogez vos données et donnez vie à vos résultats.</p><div class="suggestions">${exemples.map(([titre,q])=>`<button type="button" class="suggestion" data-question="${esc(q)}"><strong>${titre}<span aria-hidden="true">↗</span></strong><span>${esc(q)}</span></button>`).join('')}</div><small>Choisissez une suggestion ou écrivez votre propre question.</small></div>`;
+  document.querySelectorAll('.suggestion').forEach(b=>b.onclick=()=>{$('q').value=b.dataset.question;$('q').focus()});
+}
 function thread(){const t=$('thread');t.innerHTML='';const c=conv();
-  if(!c||!(c.messages||[]).length){t.innerHTML='<div class="empty">Posez une question sur vos données.</div>';return}
+  if(!c||!(c.messages||[]).length){bienvenue();return}
   c.messages.forEach(m=>{bubble('u',esc(m.question));assistant(m)});t.scrollTop=t.scrollHeight}
 function bubble(cls,html){const d=document.createElement('div');d.className='m '+cls;d.innerHTML=`<div class="bub${cls==='e'?' e':''}">${html}</div>`;
   $('thread').appendChild(d);d.scrollIntoView();return d}
@@ -97,18 +108,21 @@ function assistant(m){
   if(m.reponse)h+=`<div class="bub">${esc(m.reponse)}</div>`;
   else if(m.attente)h+='<div class="bub txt"><i>Rédaction de la réponse…</i></div>';
   const r=m.resultats;
-  if(r&&r.rows.length){if(!r.masque)h+='<div class="tw"><table><thead><tr>'+r.columns.map(c=>`<th>${esc(c)}</th>`).join('')+'</tr></thead><tbody>'+
-    r.rows.slice(0,100).map(x=>'<tr>'+r.columns.map(c=>`<td>${esc(String(x[c]??''))}</td>`).join('')+'</tr>').join('')+'</tbody></table></div>';
+  const nonTechniques=r?.columns.filter(c=>!/^ID_/i.test(c));
+  const visibles=nonTechniques?.length?nonTechniques:r?.columns;
+  if(r&&r.rows.length){if(!r.masque)h+='<div class="tw"><table><thead><tr>'+visibles.map(c=>`<th>${esc(libelleColonne(c))}</th>`).join('')+'</tr></thead><tbody>'+
+    r.rows.slice(0,100).map(x=>'<tr>'+visibles.map(c=>`<td>${esc(String(x[c]??''))}</td>`).join('')+'</tr>').join('')+'</tbody></table></div>';
     if(!r.masque&&r.rows.length>100)h+='<div class="exp">Affichage limité aux 100 premières lignes sur '+r.rows.length+' — utilisez l\'export pour tout obtenir.</div>';
     if(r.truncated)h+='<div class="exp">Résultat limité à '+r.row_count+' lignes.</div>';
     h+=`<div class="exp">Exporter :<select>${['csv','xlsx','pdf','json','tsv','md'].map(f=>`<option>${f}</option>`).join('')}</select><button>Télécharger</button></div>`}
   if(r&&r.rows.length)h+=builder(r);
   if(r&&r.graphique)h+='<div style="width:min(720px,100%);background:#fff;border:1px solid var(--bd);border-radius:8px;padding:12px"><canvas></canvas></div>';
-  if(m.sql_genere)h+=`<div class="sql">${esc(m.sql_genere)}</div>`;
+  if(m.sql_genere)h+=`<details class="sql"><summary>Voir la requête SQL</summary><pre>${esc(m.sql_genere)}</pre></details>`;
   d.innerHTML=h||'<div class="bub"><em>Aucun résultat.</em></div>';
   const b=d.querySelector('.exp button');
   if(b)b.onclick=()=>{location.href=`/api/export/${m.id}?format=${d.querySelector('.exp select').value}`};
-  $('thread').appendChild(d);if(r&&r.graphique)chart(d.querySelector('canvas'),r);if(r&&r.rows.length)wire(d,r);return d}
+  ajouterActions(d,m);
+  $('thread').appendChild(d);d.scrollIntoView({block:'start'});if(r&&r.graphique)chart(d.querySelector('canvas'),r);if(r&&r.rows.length)wire(d,r);return d}
 function majTexte(node,txt){const b=node&&node.querySelector('.txt');if(b)b.textContent=txt}
 // --- Graphique construit par l'utilisateur à partir du tableau ---
 const numCols=r=>r.columns.filter(c=>r.rows.some(x=>typeof x[c]==='number')&&r.rows.every(x=>x[c]==null||typeof x[c]==='number'));
@@ -142,13 +156,15 @@ async function chart(cv,r,g){g=g||r.graphique;
     backgroundColor:pie?PAL:PAL[i%8],borderColor:pie?'#fff':PAL[i%8],tension:.25}))},
     options:{plugins:{title:{display:!!g.titre,text:g.titre},legend:{display:pie||g.y.length>1}}}})}
 $('new').onclick=async()=>{const c=await api('/api/conversations','POST');convs.unshift(c);cur=c.id;hist();thread();$('q').focus()};
-$('f').onsubmit=async e=>{e.preventDefault();const q=$('q').value.trim();if(!q)return;
+$('f').onsubmit=async e=>{e.preventDefault();const q=$('q').value.trim();if(!q||sending)return;
+  sending=true;$('send').disabled=true;$('send').textContent='Recherche…';$('thread').setAttribute('aria-busy','true');
+  try{
   if(!conv()){const c=await api('/api/conversations','POST');convs.unshift(c);cur=c.id}
   const c=conv();if(!c.messages){try{await charger(c)}catch{c.messages=[]}}
   if(!c.messages.length)$('thread').innerHTML='';
-  bubble('u',esc(q));$('q').value='';$('q').disabled=true;const w=bubble('a','<i>Recherche en cours…</i>');
+  bubble('u',esc(q));$('q').value='';$('q').disabled=true;const w=bubble('a','<div class="thinking" role="status"><span class="thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span>J’explore vos données…</div>');
   const m={question:q};
-  try{const r=await api('/api/ask','POST',{conv_id:c.id,question:q,veut_reponse:$('cr').checked,veut_tableau:$('ct').checked});
+  try{const r=await api('/api/ask','POST',{conv_id:c.id,question:q,fournisseur:document.querySelector('input[name="model"]:checked').value,veut_reponse:$('cr').checked,veut_tableau:$('ct').checked});
     Object.assign(m,{id:r.id,reponse:r.reponse,sql_genere:r.sql_genere,resultats:r.resultats,attente:!!r.texte_en_attente})}
   catch(x){m.erreur=x.message}
   w.remove();const node=assistant(m);c.messages.push(m);if(!c.titre)c.titre=q.slice(0,80);
@@ -157,6 +173,7 @@ $('f').onsubmit=async e=>{e.preventDefault();const q=$('q').value.trim();if(!q)r
   // Le tableau est déjà affiché : la phrase de réponse arrive ensuite, sans bloquer l'utilisateur.
   if(m.attente)api('/api/ask/'+m.id+'/texte','POST')
     .then(t=>{m.reponse=t.reponse;m.attente=false;majTexte(node,t.reponse)})
-    .catch(x=>{m.attente=false;majTexte(node,'(Réponse texte indisponible : '+x.message+')')})};
-start();
-</script></body></html>
+    .catch(x=>{m.attente=false;majTexte(node,'(Réponse texte indisponible : '+x.message+')')})
+  }catch(x){bubble('a e',esc(x.message))}
+  finally{sending=false;$('send').disabled=false;$('send').innerHTML='Envoyer <span aria-hidden="true">↑</span>';$('q').disabled=false;$('thread').setAttribute('aria-busy','false');$('q').focus()}};
+</script><script src="/static/actions.js?v=20261014-ui-3"></script><script>start();</script></body></html>

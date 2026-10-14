@@ -1,13 +1,10 @@
-import json
-from google.genai import types
-from api import _appeler_gemini_avec_retry
 
 TYPES_GRAPH = ("bar", "line", "pie", "doughnut")
 
 def choisir_graphique(question, res):
     """
     Choisit le type de graphique et les colonnes à utiliser.
-    En cas d'échec de l'IA, utilise une méthode de secours (repli heuristique).
+    Déduit le graphique du tableau et de la demande sans appel à Gemini.
     """
     cols, rows = res["columns"], res["rows"]
     
@@ -20,33 +17,21 @@ def choisir_graphique(question, res):
     if len(cols) < 2 or not rows or not nums:
         return None
         
-    spec = None
-    try:
-        # On demande à Gemini d'analyser les données pour recommander le meilleur graphique
-        r = _appeler_gemini_avec_retry(
-            f"Question : {question}\nColonnes : {cols} (numériques : {nums})\n"
-            f"Début des lignes : {json.dumps(rows[:3], ensure_ascii=False, default=str)}\n"
-            f"Nombre de lignes : {len(rows)}\n"
-            'Choisis le graphique le plus parlant. Réponds en JSON : {"type":"bar|line|pie|doughnut",'
-            '"x":"colonne","y":["colonnes numériques"],"titre":"titre court"}. '
-            "line = évolution dans le temps ; pie/doughnut = parts d'un tout (8 lignes max, un seul y) ; sinon bar.",
-            types.GenerateContentConfig(temperature=0, response_mime_type="application/json"))
-        spec = json.loads(r.text)
-    except Exception:
-        spec = None
-        
-    # Vérifie si le JSON renvoyé par l'IA est valide et correspond à nos colonnes
-    ok = isinstance(spec, dict) and spec.get("type") in TYPES_GRAPH and spec.get("x") in cols \
-        and isinstance(spec.get("y"), list) and spec["y"] and all(y in nums for y in spec["y"])
-        
-    # Si l'IA a échoué ou répondu n'importe quoi, on crée un graphique "Barres" par défaut
-    if not ok:
-        x = next((c for c in cols if c not in nums), cols[0]) # On prend la 1ère colonne texte pour l'axe X
-        y = [c for c in nums if c != x][:1] # On prend la 1ère colonne numérique pour l'axe Y
-        if not y:
-            return None
-        spec = {"type": "bar", "x": x, "y": y, "titre": question[:60]}
-        
+    # Le type et les axes se déduisent du tableau, sans appel réseau.
+    x = next((c for c in cols if c not in nums), cols[0])
+    y = [c for c in nums if c != x][:1]
+    if not y:
+        return None
+    q = question.lower()
+    type_ = "bar"
+    if any(mot in q for mot in ("camembert", "pie", "circulaire")) and len(rows) <= 8:
+        type_ = "pie"
+    elif "doughnut" in q and len(rows) <= 8:
+        type_ = "doughnut"
+    elif any(mot in q for mot in ("courbe", "evolution", "évolution", "line")):
+        type_ = "line"
+    spec = {"type": type_, "x": x, "y": y, "titre": question[:100]}
+
     # Les camemberts/doughnuts n'ont besoin que d'une seule série de données (un seul Y)
     if spec["type"] in ("pie", "doughnut"):
         spec["y"] = spec["y"][:1]

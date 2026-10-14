@@ -12,6 +12,7 @@
 <style>
   :root { --bleu:#0a7bd1; --gris:#5b6770; --bord:#d8dee4; }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { height: 100%; margin: 0; font-family: system-ui, Segoe UI, Arial, sans-serif; color: #1c2430; }
   body { display: flex; flex-direction: column; }
   header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; padding: 10px 16px;
@@ -49,7 +50,8 @@
 
   const $ = (id) => document.getElementById(id);
   const carte = L.map("carte").setView([46.6, 2.5], 6);   // France entière au départ
-  L.tileLayer(TUILES, { maxZoom: 19, attribution: ATTRIBUTION }).addTo(carte);
+  const fond = L.tileLayer(TUILES, { maxZoom: 19, attribution: ATTRIBUTION }).addTo(carte);
+  fond.on('tileerror', () => message('Le fond de carte ne peut pas être chargé. Les sites restent positionnés ; vérifiez la connexion Internet.', true));
   const groupe = L.markerClusterGroup({ chunkedLoading: true });
   carte.addLayer(groupe);
 
@@ -101,6 +103,7 @@
 
   function remplirNiveaux() {
     const sel = $("niveau");
+    sel.closest('label').hidden = points.every(p => !p.niveau);
     sel.replaceChildren(new Option("Tous les niveaux", ""));
     [...new Set(points.map(niveauDe))].sort((a, b) => a.localeCompare(b, "fr"))
       .forEach((n) => sel.appendChild(new Option(n, n)));
@@ -113,7 +116,9 @@
     message("Chargement…");
     let r;
     try {
-      r = await fetch("/api/carte", { credentials: "same-origin", cache: "no-store" });
+      const message = new URLSearchParams(location.search).get('message_id');
+      const url = message && /^\d+$/.test(message) ? '/api/carte?message_id='+encodeURIComponent(message) : '/api/carte';
+      r = await fetch(url, { credentials: "same-origin", cache: "no-store" });
     } catch (e) {
       return message("Serveur injoignable.", true);
     }
@@ -126,6 +131,7 @@
         : "Carte indisponible. " + detail, true);
     }
     const data = await r.json();
+    if(data.filtre)document.querySelector('h1').textContent='Carte des résultats sélectionnés';
     points = data.points || [];
     ignores = data.ignores || 0;
     remplirNiveaux();

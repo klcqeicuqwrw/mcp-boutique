@@ -1,6 +1,7 @@
 import json, re, time, uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from typing import Literal
 import securite as S
 from boutique.dependencies import user_dep
 
@@ -9,6 +10,8 @@ router = APIRouter()
 from api import MessageHistorique, formuler_reponse, generer_sql, DICTIONNAIRE_PATH
 from dictionnaire import contexte_dictionnaire
 from boutique.graphiques import choisir_graphique
+from boutique.requetes_rapides import sql_comptage
+from boutique import localisation
 
 MOTS_GRAPH = re.compile(r"graph|courbe|histogramme|camembert|diagramme|chart|plot", re.I)
 
@@ -73,6 +76,7 @@ def supprimer_conv(cid: str, u=Depends(user_dep)):
 
 class Question(BaseModel):
     conv_id: str
+    fournisseur: Literal["gemini", "openai"] = "gemini"
     question: str = Field(min_length=1, max_length=8000)
     veut_reponse: bool = True
     veut_tableau: bool = True
@@ -92,6 +96,27 @@ def ask(p: Question, u=Depends(user_dep)):
         raise HTTPException(400, "La question ne peut pas être vide.")
     conv = _conv(p.conv_id, u)
     scope = S.access_scope(u)
+    if localisation.reprise(question):
+        precedent = S.q("SELECT sql,resultats,access_scope FROM messages WHERE conv_id=? AND resultats IS NOT NULL ORDER BY id DESC LIMIT 1", (conv["id"],), one=True)
+        if not precedent:
+            raise HTTPException(400, "Demandez d'abord une liste de résultats à localiser.")
+        if not S.message_accessible(precedent, u):
+            raise HTTPException(403, "Vos droits ne permettent plus de consulter ces résultats.")
+        try:
+            res = S.lire_resultats(precedent["resultats"])
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        if not localisation.possible(res):
+            raise HTTPException(400, "Cette sélection ne contient pas d'identifiant de logement, patrimoine, client ou occupant pour la carte.")
+        res["localisation_demandee"] = True
+        res.pop("masque", None)
+        rep = "La sélection est prête à être affichée sur la carte."
+        mid = S.q("INSERT INTO messages(conv_id,question,reponse,sql,resultats,created_at,access_scope) VALUES(?,?,?,?,?,?,?)",
+                  (conv["id"], question, rep, precedent["sql"], json.dumps(res, ensure_ascii=False), time.time(), scope), write=True)
+        if not S.scope_actuel(u, scope):
+            raise HTTPException(403, "Vos droits ont changé pendant la demande.")
+        S.log_query(u, question, precedent["sql"], "ok", res["row_count"])
+        return dict(id=mid, reponse=rep, sql_genere=precedent["sql"], resultats=res, texte_en_attente=False)
     
     # 1. Vérification des droits : on construit le schéma de la base UNIQUEMENT
     # avec les tables/colonnes que l'utilisateur a le droit de voir.
@@ -109,7 +134,8 @@ def ask(p: Question, u=Depends(user_dep)):
         if not S.message_accessible(m, u):
             continue
         hist += [MessageHistorique(role="user", content=m["question"] or ""),
-                 MessageHistorique(role="assistant", content=m["reponse"] or "(Tableau généré)")]
+                 MessageHistorique(role="assistant", content=(m["reponse"] or "(Tableau généré)")
+                                  + ("\nRequête précédente : " + m["sql"] if m["sql"] else ""))]
 
     def enregistrer(**kw):
         """Sous-fonction pour sauvegarder l'échange dans la base de données."""
@@ -127,42 +153,59 @@ def ask(p: Question, u=Depends(user_dep)):
     schema_autorise = {t.lower(): {c.lower() for c in colonnes
                          if allowed is None or allowed[t.lower()] is None or c.lower() in allowed[t.lower()]}
                       for t, colonnes in infos.items() if allowed is None or t.lower() in allowed}
-    dictionnaire = contexte_dictionnaire(DICTIONNAIRE_PATH, schema_autorise, question)
-    cle = (question, schema, dictionnaire)
+    rapide = sql_comptage(question, schema_autorise) if not hist else None
+    dictionnaire = "" if rapide else contexte_dictionnaire(DICTIONNAIRE_PATH, schema_autorise, question)
+    cle = (question, schema, dictionnaire, p.fournisseur)
     en_cache = None if hist else _sql_cache.get(cle)
-    if en_cache and time.time() - en_cache[0] < SQL_CACHE_TTL:
+    journal = lambda **kw: S.log_gemini(u, conv["id"], **kw)
+    fournisseur, erreur_primaire, res = p.fournisseur, None, None
+    sql = None
+    if rapide:
+        sql, fournisseur = rapide, "local"
+    elif en_cache and time.time() - en_cache[0] < SQL_CACHE_TTL:
         sql = en_cache[1]
+        fournisseur = en_cache[2] if len(en_cache) > 2 else "gemini"
     else:
-        journal = lambda **kw: S.log_gemini(u, conv["id"], **kw)
         try:
-            sql = generer_sql(question, schema, hist, log=journal, dictionnaire=dictionnaire)
-        except Exception as e:
-            raise HTTPException(502, f"Erreur Gemini (génération SQL): {e}")
+            sql = generer_sql(question, schema, hist, log=journal, dictionnaire=dictionnaire, fournisseur=p.fournisseur)
+        except Exception as exc:
+            erreur_primaire = exc
 
-    # 4. Exécution de la requête SQL générée
-    if not S.scope_actuel(u, scope):
-        raise HTTPException(403, "Vos droits ont changé pendant la demande. Reposez la question.")
+    def verifier_droits():
+        if not S.scope_actuel(u, scope):
+            raise HTTPException(403, "Vos droits ont changé pendant la demande. Reposez la question.")
+
+    def refus(sql_refuse, exc):
+        S.log_query(u, question, sql_refuse, "refusé")
+        enregistrer(sql=sql_refuse, erreur=str(exc))
+        raise HTTPException(403, str(exc)) from exc
+
     t0 = time.time()
-    try:
-        res = S.run_query(u, sql)
-    except PermissionError as e:
-        # L'IA a tenté d'interroger une table interdite pour cet utilisateur
-        S.log_query(u, question, sql, "refusé")
-        enregistrer(sql=sql, erreur=str(e))
-        raise HTTPException(403, str(e))
-    except (ValueError, RuntimeError) as e:
-        # Requête SQL malformée ou erreur de base de données
-        S.log_query(u, question, sql, "erreur")
-        enregistrer(sql=sql, erreur=str(e))
-        raise HTTPException(400, f"Requête invalide: {e}")
-        
+    if sql is not None:
+        verifier_droits()
+        try:
+            res = S.run_query(u, sql)
+        except PermissionError as exc:
+            refus(sql, exc)  # Un refus de droits ne déclenche jamais un autre fournisseur.
+        except (ValueError, RuntimeError) as exc:
+            erreur_primaire = exc
+            _sql_cache.pop(cle, None)
+            S.log_query(u, question, sql, "erreur")
+
+    if erreur_primaire is not None:
+        nom = "OpenAI" if p.fournisseur == "openai" else "Gemini"
+        erreur = f"{nom} n'a pas pu répondre. Vérifiez sa clé API et sa disponibilité, puis réessayez."
+        enregistrer(sql=sql, erreur=erreur)
+        raise HTTPException(502, erreur) from erreur_primaire
+
+    verifier_droits()
+    res["fournisseur_sql"] = fournisseur
+    res["fournisseur_ia"] = p.fournisseur
     S.log_query(u, question, sql, "ok", res["row_count"], int((time.time() - t0) * 1000))
-    
-    # Enregistrement dans le cache si la requête a réussi
     if not hist:
         if len(_sql_cache) >= SQL_CACHE_MAX:
             _sql_cache.clear()
-        _sql_cache[cle] = (time.time(), sql)
+        _sql_cache[cle] = (time.time(), sql, fournisseur)
 
     # 5. Préparation de la réponse
     rep, attente = "", False
@@ -184,6 +227,7 @@ def ask(p: Question, u=Depends(user_dep)):
             res["graphique"] = g
             
     # 7. Sauvegarde et renvoi des données
+    res["localisation_demandee"] = localisation.demandee(question) and localisation.possible(res)
     mid = enregistrer(reponse=rep, sql=sql, resultats=res)
     if not S.scope_actuel(u, scope):
         raise HTTPException(403, "Vos droits ont changé pendant la demande. Reposez la question.")
@@ -214,7 +258,7 @@ def ask_texte(mid: int, u=Depends(user_dep)):
     try:
         rep = formuler_reponse(m["question"], resultats, log=journal, sql=m["sql"])
     except Exception as e:
-        raise HTTPException(502, f"Erreur Gemini (formulation): {e}")
+        raise HTTPException(502, "La synthèse IA est temporairement indisponible. Le tableau reste accessible.")
     if not S.scope_actuel(u, scope):
         raise HTTPException(403, "Vos droits ont changé pendant la demande. Reposez la question.")
         

@@ -2957,7 +2957,7 @@ Nombre de lignes : 80
 - Libelle_patrimoine — Type SQLite : TEXT. NULL observés : non (0/80). Valeurs distinctes non NULL : 80.
    Description : Libellé
    Format / valeurs indicatives : Cellule A. Guérin, Les Orchidées bât. C
-   Exemples : Residence 001 ; Residence 002 ; Residence 003
+   Exemples : Résidence Les Jardins de la Vilaine ; Résidence Les Jardins de l’Erdre ; Résidence Les Terrasses de la Rade
 - Code_niveau_organisation_1 — Type SQLite : TEXT. NULL observés : non (0/80). Valeurs distinctes non NULL : 8.
    Description : Organisation niveau 1
    Format / valeurs indicatives : 2 à 4 caractères
@@ -3004,16 +3004,16 @@ Nombre de lignes : 80
    Plage observée : 35000 à 35079
 - Latitude — Type SQLite : REAL. NULL observés : non (0/80). Valeurs distinctes non NULL : 20.
    Confidentialité : RGPD
-   Description : Latitude
+   Description : Coordonnée fictive de patrimoine, répartie autour du centre de sa commune ; position approximative, sans géocodage de l’adresse.
    Format / valeurs indicatives : 48.109781
-   Exemples : 47.2 ; 47.21 ; 47.22
-   Plage observée : 47.2 à 47.39
+   Exemples : 47.2154 ; 48.1143 ; 47.6552
+   Plage observée : 47.2154 à 48.3934
 - Longitude — Type SQLite : REAL. NULL observés : non (0/80). Valeurs distinctes non NULL : 20.
    Confidentialité : RGPD
-   Description : Longitude
+   Description : Coordonnée fictive de patrimoine, répartie autour du centre de sa commune ; position approximative, sans géocodage de l’adresse.
    Format / valeurs indicatives : -1.668032
-   Exemples : -1.6 ; -1.59 ; -1.58
-   Plage observée : -1.6 à -1.41
+   Exemples : -1.5581 ; -1.6823 ; -2.7653
+   Plage observée : -4.4906 à -1.5491
 - Code_département — Type SQLite : INTEGER. NULL observés : non (0/80). Valeurs distinctes non NULL : 5.
    Description : Département
    Exemples : 35 ; 36 ; 37

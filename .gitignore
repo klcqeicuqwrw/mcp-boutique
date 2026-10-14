@@ -10,3 +10,4 @@ mcp_requetes.log*
 *.sqlite-shm
 .coverage
 htmlcov/
+.backups/

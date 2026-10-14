@@ -3,6 +3,7 @@ fastapi
 uvicorn
 pydantic
 google-genai
+openai>=1.68
 httpx
 python-dotenv
 reportlab

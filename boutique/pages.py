@@ -63,15 +63,46 @@ def _coord(valeur, borne):
 
 
 @router.get("/api/carte")
-def api_carte(response: Response, u=Depends(user_dep)):
+def api_carte(response: Response, message_id: int | None = None, u=Depends(user_dep)):
     """Points du patrimoine pour la carte. Passe par run_query : les droits du service s'appliquent.
     Les adresses (données RGPD) ne sont volontairement jamais lues ni renvoyées."""
     sql = ("SELECT ID_patrimoine AS id, Libelle_patrimoine AS type_patrimoine, Libelle_commune AS ville, Latitude AS latitude, Longitude AS longitude "
            "FROM patrimoine "
            "WHERE latitude IS NOT NULL AND TRIM(latitude) <> '' AND longitude IS NOT NULL AND TRIM(longitude) <> ''")
+    args = ()
+    if message_id is not None:
+        m = S.q("SELECT m.sql,m.resultats,m.access_scope FROM messages m JOIN conversations c ON c.id=m.conv_id WHERE m.id=? AND c.user_id=?", (message_id, u["id"]), one=True)
+        if not m:
+            raise HTTPException(404, "Résultat introuvable")
+        if not S.message_accessible(m, u):
+            raise HTTPException(403, "Vos droits ne permettent pas de consulter ce résultat.")
+        try:
+            resultat = S.lire_resultats(m["resultats"])
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        ids, identifiant = [], None
+        for candidat in ("id_patrimoine", "id_lot", "id_client", "id_occupant"):
+            colonnes = [c for c in resultat["columns"] if c.lower() == candidat]
+            ids = sorted({ident.strip() for row in resultat["rows"] for col in colonnes
+                          for ident in str(row.get(col) or "").split(",") if ident.strip()})
+            if ids:
+                identifiant = candidat
+                break
+        if not ids:
+            return {"points": [], "ignores": 0, "tronque": False, "filtre": True}
+        # Les identifiants proviennent du résultat autorisé ; paramètres SQL, jamais concaténés.
+        parametres = ",".join("?" for _ in ids)
+        resolutions = {
+            "id_patrimoine": parametres,
+            "id_lot": f"SELECT ID_patrimoine FROM Lot WHERE ID_lot IN ({parametres})",
+            "id_client": f"SELECT l.ID_patrimoine FROM Lot l JOIN Client_lot_pivot cl ON cl.ID_lot=l.ID_lot WHERE cl.ID_client IN ({parametres})",
+            "id_occupant": f"SELECT l.ID_patrimoine FROM Lot l JOIN Client_lot_pivot cl ON cl.ID_lot=l.ID_lot JOIN Occupant o ON o.ID_client=cl.ID_client WHERE o.ID_occupant IN ({parametres})",
+        }
+        sql += " AND ID_patrimoine IN (" + resolutions[identifiant] + ")"
+        args = tuple(ids)
     t0 = time.time()
     try:
-        res = S.run_query(u, sql, max_rows=20000)
+        res = S.run_query(u, sql, max_rows=20000, args=args)
     except PermissionError as e:
         S.log_query(u, "[carte]", sql, "refusé")
         raise HTTPException(403, str(e))
@@ -88,7 +119,7 @@ def api_carte(response: Response, u=Depends(user_dep)):
         points.append({"id": r["id"], "nom": r["type_patrimoine"], "commune": r["ville"],
                         "lat": lat, "lon": lon})
     response.headers["Cache-Control"] = "no-store"
-    return {"points": points, "ignores": res["row_count"] - len(points), "tronque": res["truncated"]}
+    return {"points": points, "ignores": res["row_count"] - len(points), "tronque": res["truncated"], "filtre": message_id is not None}
 
 
 # --- API : Authentification et Profil --------------------------------------------

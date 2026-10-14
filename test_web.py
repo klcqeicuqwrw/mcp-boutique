@@ -174,12 +174,43 @@ def test_retry_gemini_reseau_et_pas_attente_apres_dernier_echec(monkeypatch):
     appels, pauses = [], []
     def erreur(**kwargs):
         appels.append(kwargs)
-        raise httpx.ReadTimeout("Temps dépassé")
+        raise httpx.ConnectError("Connexion interrompue")
     monkeypatch.setattr(api, "obtenir_client", lambda: SimpleNamespace(models=SimpleNamespace(generate_content=erreur)))
     monkeypatch.setattr(api.time, "sleep", pauses.append)
-    with pytest.raises(httpx.ReadTimeout):
+    with pytest.raises(httpx.ConnectError):
         api._appeler_gemini_avec_retry("Question", api.types.GenerateContentConfig(), tentatives=3)
     assert len(appels) == 3 and pauses == [1.5, 3]
+
+
+@pytest.mark.parametrize("code", [504, None])
+def test_expiration_gemini_sans_repetition(monkeypatch, code):
+    import api
+    import httpx
+    appels = []
+    class DeadlineError(Exception):
+        pass
+    erreur = DeadlineError("DEADLINE_EXCEEDED") if code else httpx.ReadTimeout("Temps dépassé")
+    erreur.code = code
+    def echouer(**kwargs):
+        appels.append(kwargs)
+        raise erreur
+    monkeypatch.setattr(api, "obtenir_client", lambda: SimpleNamespace(models=SimpleNamespace(generate_content=echouer)))
+    monkeypatch.setattr(api.time, "sleep", lambda _: pytest.fail("Aucune attente après expiration"))
+    with pytest.raises(type(erreur)):
+        api._appeler_gemini_avec_retry("Question", api.types.GenerateContentConfig())
+    assert len(appels) == 1
+
+
+def test_delai_gemini_par_defaut_et_configurable(monkeypatch):
+    import api
+    monkeypatch.delenv("GEMINI_TIMEOUT_SECONDS", raising=False)
+    assert api.options_http().timeout == 20000
+    assert api.options_http().retry_options.attempts == 1
+    monkeypatch.setenv("GEMINI_TIMEOUT_SECONDS", "180")
+    assert api.options_http().timeout == 180000
+    monkeypatch.setenv("GEMINI_TIMEOUT_SECONDS", "invalide")
+    with pytest.raises(ValueError, match="GEMINI_TIMEOUT_SECONDS"):
+        api.options_http()
 
 
 def test_texte_recoit_sql_execute(web, monkeypatch):
@@ -242,7 +273,7 @@ def test_changement_droits_pendant_generation(web, monkeypatch):
 
 
 @pytest.mark.parametrize("question,sql,attendu", [
-    ("Combien de clients distincts ?", "SELECT COUNT(DISTINCT ID_client) AS n FROM Client", {"n": 2}),
+    ("Combien de clients distincts ?", "SELECT COUNT(DISTINCT ID_client) AS n FROM Client", {"nombre": 2}),
     ("Montant des commandes ayant une intervention ?", "SELECT SUM(Montant_HT) AS total FROM Commande c WHERE EXISTS (SELECT 1 FROM Intervention i WHERE i.ID_commande=c.ID_commande)", {"total": 300}),
 ])
 def test_questions_metier_reference(web, monkeypatch, question, sql, attendu):
@@ -280,8 +311,43 @@ def test_synthese_sql_apercu_et_troncature(monkeypatch):
     prompts = []
     monkeypatch.setattr(api, "_appeler_et_journaliser", lambda kind, prompt, *a: prompts.append(prompt) or SimpleNamespace(text="Résumé"))
     res = dict(columns=["x"], rows=[{"x": i} for i in range(500)], row_count=500, truncated=True)
-    texte = api.formuler_reponse("Liste", res, sql="SELECT x FROM exemple")
+    texte = api.formuler_reponse("Explique cette liste", res, sql="SELECT x FROM exemple")
     assert "total inconnu" in texte
     assert "SELECT x FROM exemple" in prompts[0]
     assert '"total_lignes": null' in prompts[0]
     assert '"x": 19' in prompts[0] and '"x": 20' not in prompts[0]
+
+
+def test_comptage_direct_sans_appel_gemini(web, monkeypatch):
+    connecter(web)
+    monkeypatch.setattr(web.chat, "generer_sql", lambda *a, **kw: pytest.fail("Ce comptage ne doit pas appeler Gemini"))
+    cid = web.client.post("/api/conversations").json()["id"]
+    r = web.client.post("/api/ask", json=dict(conv_id=cid, question="Combien de clients distincts y a-t-il ?"))
+    assert r.status_code == 200, r.text
+    assert r.json()["resultats"]["rows"] == [{"nombre": 2}]
+    assert not web.calls
+
+
+def test_comptage_filtre_ne_perd_pas_condition(web, monkeypatch):
+    connecter(web)
+    cid = web.client.post("/api/conversations").json()["id"]
+    r = web.client.post("/api/ask", json=dict(conv_id=cid, question="Combien de clients à Rennes ?"))
+    assert r.status_code == 200
+    assert len(web.calls) == 1
+
+
+def test_synthese_simple_locale_sans_gemini(monkeypatch):
+    import api
+    monkeypatch.setattr(api, "_appeler_et_journaliser", lambda *a: pytest.fail("Aucun appel pour un résultat simple"))
+    res = dict(columns=["nombre"], rows=[{"nombre": 320}], row_count=1, truncated=False)
+    assert api.formuler_reponse("Combien de clients ?", res) == "Résultat : 320."
+    res = dict(columns=["nom"], rows=[{"nom": "A"}, {"nom": "B"}], row_count=2, truncated=False)
+    assert "2 lignes" in api.formuler_reponse("Liste les clients", res)
+
+
+@pytest.mark.parametrize("question,type_attendu", [("Camembert par commune", "pie"), ("Courbe du total", "line"), ("Barres par commune", "bar")])
+def test_graphique_local(question, type_attendu):
+    from boutique.graphiques import choisir_graphique
+    res = dict(columns=["commune", "total"], rows=[dict(commune="Rennes", total=10), dict(commune="Nantes", total=12)])
+    spec = choisir_graphique(question, res)
+    assert spec["type"] == type_attendu and spec["x"] == "commune" and spec["y"] == ["total"]

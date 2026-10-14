@@ -491,7 +491,7 @@ def _schema_text_brut(allowed):
     return "\n".join(lignes)
 
 
-def run_query(user, sql, max_rows=500):
+def run_query(user, sql, max_rows=500, args=()):
     """
     Exécute la requête SQL générée par l'IA sur la base métier.
     C'est ici que les filtres de sécurité sont concrètement appliqués au moment de l'exécution.
@@ -509,7 +509,7 @@ def run_query(user, sql, max_rows=500):
         c.set_progress_handler(lambda: 1 if time.monotonic() > deadline else 0, 10000)
 
         try:
-            cur = c.execute(sql)
+            cur = c.execute(sql, args)
             cols = [d[0] for d in cur.description or []]
             rows = cur.fetchmany(max_rows + 1)
         except sqlite3.DatabaseError as e:
