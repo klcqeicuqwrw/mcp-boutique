@@ -728,163 +728,163 @@ Nombre de lignes : 731
    Format observé : AAAA-MM-JJ hh:mm:ss.fff
 
 ## Client
-Nombre de lignes : 400
-- ID_client_lot — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+Nombre de lignes : 412
+- ID_client_lot — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 412.
    Confidentialité : RGPD
    Description : Identifiant client/lot
    Format / valeurs indicatives : CLT-AC-026905-LOT-AC-014311
    Exemples : CLT-AJ-003301-LOT-AJ-000001 ; CLT-AC-003302-LOT-AC-000002 ; CLT-BSH-003303-LOT-BSH-000003
-- ID_client — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 320.
+- ID_client — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 332.
    Confidentialité : RGPD
    Description : ATTENTION : ID_client n'est PAS unique dans Client (320 clients distincts pour 400 lignes). Client est au grain client × lot (clé unique : ID_client_lot). Joindre une table enfant (Occupant, Client_historique…) sur ID_client vers Client multiplie les lignes ; utiliser COUNT(DISTINCT …) ou passer par Client_lot_pivot.
    Format / valeurs indicatives : AC-003301
    Exemples : AJ-003301 ; AC-003302 ; BSH-003303
-- Code_societe — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 4.
+- Code_societe — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 4.
    Description : Société
    Format / valeurs indicatives : AJ / AC / BSH / MF1
    Exemples : AJ ; AC ; BSH
    Valeurs observées (effectif) : MF1 (100) ; BSH (100) ; AJ (100) ; AC (100)
-- Code_client — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 320.
+- Code_client — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 332.
    Confidentialité : RGPD
    Description : Code client
    Format / valeurs indicatives : Nombre à 6 chiffres
    Exemples : 003301 ; 003302 ; 003303
    Format observé : 999999 (ex. 003301)
-- Nom_prenom_client — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 16.
+- Nom_prenom_client — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 332.
    Confidentialité : RGPD
-   Description : Nom et prénom
+   Description : Nom et prénom pour une personne physique, raison sociale pour une personne morale
    Format / valeurs indicatives : Suc MME CROCQ Odette, STE SCI PICARD…
    Exemples : MR MARTIN JEAN ; MME BERNARD MARIE ; MR DUBOIS LUCAS
    Valeurs observées (effectif) : MR SIMON THOMAS (25) ; MR ROBERT HUGO (25) ; MR PETIT LOUIS (25) ; MR MARTIN JEAN (25) ; MR LEROY PAUL (25) ; MR LEFEVRE NICOLAS (25) ; MR GARCIA ANTOINE (25) ; MR DUBOIS LUCAS (25) ; MME THOMAS EMMA (25) ; MME RICHARD CHLOE (25) ; MME MOREAU LEA (25) ; MME MICHEL SARAH (25) ; MME LAURENT JULIE (25) ; MME DURAND CAMILLE (25) ; MME DAVID MANON (25) ; MME BERNARD MARIE (25)
-- Libelle_activite_client — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 4.
+- Libelle_activite_client — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 11.
    Description : Activité du client
    Format / valeurs indicatives : Acquéreur, Commerce, Foyer, Locataire, Autre…
    Exemples : Locataire ; Foyer ; Commerce
-   Valeurs observées (effectif) : Locataire (100) ; Foyer (100) ; Commerce (100) ; Acquéreur (100)
-- Code_type_client — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 4.
+   Valeurs observées (effectif) : Acquéreur (100) ; Commerce (100) ; Foyer (100) ; Locataire (100) ; Gestion immobiliere (4) ; Logement de salaries (3) ; Accompagnement social (1) ; Animation de quartier (1) ; Hebergement accompagne (1) ; Insertion professionnelle (1) ; Logement temporaire de salaries (1)
+- Code_type_client — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 5.
    Description : Code du type de client
    Format / valeurs indicatives : ACQ / BRS / CLT / COM / CVM / FAI / FOY / LAC / LAQ / PRO / PSL / SDN / VHL
    Exemples : CLT ; FOY ; COM
-   Valeurs observées (effectif) : FOY (100) ; COM (100) ; CLT (100) ; ACQ (100)
-- Libelle_type_client — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 4.
+   Valeurs observées (effectif) : ACQ (100) ; CLT (100) ; COM (100) ; FOY (100) ; PM (12)
+- Libelle_type_client — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 5.
    Description : Libellé du type de client
    Format / valeurs indicatives : Acquéreur Promotion / Acquéreur PSLA / Acquéreur vente HLM / Client acquéreur / Client locataire / Client Locataire BRS / Client vente mandat / Commercial ou professio. / Copropriétaire / Facturation interne / Foyers / Locataire-Acquéreur / Sans Droit ni titre
    Exemples : Client locataire ; Foyers ; Commercial ou professionnel
-   Valeurs observées (effectif) : Foyers (100) ; Commercial ou professionnel (100) ; Client locataire (100) ; Client acquéreur (100)
-- Code_categorie_menage — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 5.
+   Valeurs observées (effectif) : Client acquéreur (100) ; Client locataire (100) ; Commercial ou professionnel (100) ; Foyers (100) ; Personne morale (12)
+- Code_categorie_menage — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 5.
    Description : Catégorie de ménage
    Format / valeurs indicatives : I0 / IM1 … IM9 / M0
    Exemples : I0 ; IM1 ; IM2
    Valeurs observées (effectif) : M0 (80) ; IM3 (80) ; IM2 (80) ; IM1 (80) ; I0 (80)
-- Libelle_composition_familiale — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 5.
+- Libelle_composition_familiale — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 5.
    Confidentialité : RGPD
    Description : Composition familiale
    Format / valeurs indicatives : Autre / Couple avec enfant / Couple sans enfant / Monoparentale / Personne seule
    Exemples : Personne seule ; Couple sans enfant ; Couple avec enfant
    Valeurs observées (effectif) : Personne seule (80) ; Monoparentale (80) ; Couple sans enfant (80) ; Couple avec enfant (80) ; Autre (80)
-- Nombre_occupant_enfant — Type SQLite : INTEGER. NULL observés : non (0/400). Valeurs distinctes non NULL : 3.
+- Nombre_occupant_enfant — Type SQLite : INTEGER. NULL observés : oui (12/412). Valeurs distinctes non NULL : 3.
    Confidentialité : RGPD
    Description : Nombre d'enfants
    Exemples : 0 ; 1 ; 2
    Valeurs observées (effectif) : 0 (134) ; 2 (133) ; 1 (133)
-- Nombre_occupant_adulte — Type SQLite : INTEGER. NULL observés : non (0/400). Valeurs distinctes non NULL : 3.
+- Nombre_occupant_adulte — Type SQLite : INTEGER. NULL observés : oui (12/412). Valeurs distinctes non NULL : 3.
    Confidentialité : RGPD
    Description : Nombre d'adultes
    Exemples : 1 ; 2 ; 3
    Valeurs observées (effectif) : 1 (134) ; 3 (133) ; 2 (133)
-- Nombre_occupant_autre — Type SQLite : INTEGER. NULL observés : non (0/400). Valeurs distinctes non NULL : 2.
+- Nombre_occupant_autre — Type SQLite : INTEGER. NULL observés : oui (12/412). Valeurs distinctes non NULL : 2.
    Confidentialité : RGPD
    Description : Autres occupants
    Exemples : 0 ; 1
    Valeurs observées (effectif) : 1 (200) ; 0 (200)
-- Nombre_occupant_personne — Type SQLite : INTEGER. NULL observés : non (0/400). Valeurs distinctes non NULL : 6.
+- Nombre_occupant_personne — Type SQLite : INTEGER. NULL observés : oui (12/412). Valeurs distinctes non NULL : 6.
    Confidentialité : RGPD
    Description : Total d'occupants
    Exemples : 1 ; 4 ; 5
    Valeurs observées (effectif) : 5 (67) ; 4 (67) ; 2 (67) ; 1 (67) ; 6 (66) ; 3 (66)
-- Date_debut_occupation — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+- Date_debut_occupation — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 401.
    Description : Début d'occupation
    Format / valeurs indicatives : AAAA-MM-JJ
    Exemples : 2018-01-01 ; 2019-02-03 ; 2020-03-05
    Format observé : AAAA-MM-JJ
-- Date_fin_occupation — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 320.
+- Date_fin_occupation — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 296.
    Description : Fin d'occupation
    Format / valeurs indicatives : AAAA-MM-JJ
    Exemples : 2025-12-31 ; 2025-01-02 ; 2025-01-03
    Format observé : AAAA-MM-JJ
-- Indicateur_statut_presence — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 2.
+- Indicateur_statut_presence — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 2.
    Description : Statut de présence
    Format / valeurs indicatives : Présent / Parti
    Exemples : Parti ; Présent
    Valeurs observées (effectif) : Présent (320) ; Parti (80)
-- Annee_revenus_client — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 1.
+- Annee_revenus_client — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 1.
    Confidentialité : RGPD
    Description : Année de référence des revenus
    Format / valeurs indicatives : AAAA
    Exemples : 2025-01-01
    Valeurs observées (effectif) : 2025-01-01 (400)
-- Montant_revenus_client — Type SQLite : INTEGER. NULL observés : non (0/400). Valeurs distinctes non NULL : 20.
+- Montant_revenus_client — Type SQLite : INTEGER. NULL observés : oui (12/412). Valeurs distinctes non NULL : 20.
    Confidentialité : RGPD
    Description : Revenus du client
    Exemples : 18000 ; 19200 ; 20400
    Plage observée : 18000 à 40800
-- Montant_plafond_plus — Type SQLite : INTEGER. NULL observés : non (0/400). Valeurs distinctes non NULL : 5.
+- Montant_plafond_plus — Type SQLite : INTEGER. NULL observés : oui (12/412). Valeurs distinctes non NULL : 5.
    Description : Plafond de ressources PLUS
    Exemples : 24000 ; 25000 ; 26000
    Valeurs observées (effectif) : 28000 (80) ; 27000 (80) ; 26000 (80) ; 25000 (80) ; 24000 (80)
-- Pourcentage_revenus_plafond_plus — Type SQLite : REAL. NULL observés : non (0/400). Valeurs distinctes non NULL : 20.
+- Pourcentage_revenus_plafond_plus — Type SQLite : REAL. NULL observés : oui (12/412). Valeurs distinctes non NULL : 20.
    Confidentialité : RGPD
    Description : Revenus / plafond PLUS
    Format / valeurs indicatives : 0 à 1
    Exemples : 0.75 ; 0.768 ; 0.785
    Plage observée : 0.75 à 1.5
-- Classe_pourcentage_revenus_plafond_plus — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 7.
+- Classe_pourcentage_revenus_plafond_plus — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 7.
    Confidentialité : RGPD
    Description : Tranche du ratio revenus/plafond
    Format / valeurs indicatives : 20% et moins / 20%-40% / 40%-60% / 60%-80% / 80%-100% / 100%-120% / 120% et plus
    Exemples : 20% et moins ; 20%-40% ; 40%-60%
    Valeurs observées (effectif) : 20% et moins (58) ; 80%-100% (57) ; 60%-80% (57) ; 40%-60% (57) ; 20%-40% (57) ; 120% et plus (57) ; 100%-120% (57)
-- Code_departement_adresse_temporaire — Type SQLite : INTEGER. NULL observés : non (0/400). Valeurs distinctes non NULL : 5.
+- Code_departement_adresse_temporaire — Type SQLite : INTEGER. NULL observés : oui (12/412). Valeurs distinctes non NULL : 5.
    Confidentialité : RGPD
    Description : Département de l'adresse temporaire
    Format / valeurs indicatives : 1 à 976
    Exemples : 35 ; 36 ; 37
    Valeurs observées (effectif) : 39 (80) ; 38 (80) ; 37 (80) ; 36 (80) ; 35 (80)
-- Code_commune_adresse_temporaire — Type SQLite : INTEGER. NULL observés : non (0/400). Valeurs distinctes non NULL : 100.
+- Code_commune_adresse_temporaire — Type SQLite : INTEGER. NULL observés : oui (12/412). Valeurs distinctes non NULL : 100.
    Confidentialité : RGPD
    Description : Commune (code)
    Format / valeurs indicatives : 5 chiffres
    Exemples : 35000 ; 35001 ; 35002
    Plage observée : 35000 à 35099
-- Code_postal_adresse_temporaire — Type SQLite : INTEGER. NULL observés : non (0/400). Valeurs distinctes non NULL : 100.
+- Code_postal_adresse_temporaire — Type SQLite : INTEGER. NULL observés : oui (12/412). Valeurs distinctes non NULL : 100.
    Confidentialité : RGPD
    Description : Code postal
    Format / valeurs indicatives : 5 chiffres (35160)
    Exemples : 35000 ; 35001 ; 35002
    Plage observée : 35000 à 35099
-- Libelle_commune_adresse_temporaire — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 5.
+- Libelle_commune_adresse_temporaire — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 5.
    Confidentialité : RGPD
    Description : Commune
    Format / valeurs indicatives : RENNES / GUERANDE / SAINT-MALO…
    Exemples : RENNES ; GUERANDE ; SAINT-MALO
    Valeurs observées (effectif) : VANNES (80) ; SAINT-MALO (80) ; RENNES (80) ; LORIENT (80) ; GUERANDE (80)
-- Libelle_numero_rue_adresse_temporaire — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 80.
+- Libelle_numero_rue_adresse_temporaire — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 80.
    Confidentialité : RGPD
    Description : Numéro et rue
    Format / valeurs indicatives : 9 RUE BOURGALIN
    Exemples : 1 RUE BOURGALIN ; 2 RUE BOURGALIN ; 3 RUE BOURGALIN
-- Nom_prenom_CSR_referent — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 16.
+- Nom_prenom_CSR_referent — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 16.
    Confidentialité : RGPD
    Description : CSR référent
    Format / valeurs indicatives : Prénom NOM
    Exemples : CSR Jean Martin ; CSR Marie Bernard ; CSR Lucas Dubois
    Valeurs observées (effectif) : CSR Thomas Simon (25) ; CSR Sarah Michel (25) ; CSR Paul Leroy (25) ; CSR Nicolas Lefevre (25) ; CSR Marie Bernard (25) ; CSR Manon David (25) ; CSR Lucas Dubois (25) ; CSR Louis Petit (25) ; CSR Lea Moreau (25) ; CSR Julie Laurent (25) ; CSR Jean Martin (25) ; CSR Hugo Robert (25) ; CSR Emma Thomas (25) ; CSR Chloe Richard (25) ; CSR Camille Durand (25) ; CSR Antoine Garcia (25)
-- Lien_IKOS_synthese_client — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 320.
+- Lien_IKOS_synthese_client — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 320.
    Confidentialité : RGPD
    Description : Lien vers la synthèse client
    Format / valeurs indicatives : https://…
    Exemples : https://ikos.local/client/AJ-003301 ; https://ikos.local/client/AC-003302 ; https://ikos.local/client/BSH-003303
-- Date_actualisation — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+- Date_actualisation — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 401.
    Description : Mise à jour
    Exemples : 2025-01-01 12:00:00.000 ; 2025-01-02 12:00:00.000 ; 2025-01-03 12:00:00.000
    Format observé : AAAA-MM-JJ hh:mm:ss.fff
@@ -970,27 +970,27 @@ Nombre de lignes : 900
    Format observé : AAAA-MM-JJ hh:mm:ss.fff
 
 ## Client_lot_pivot
-Nombre de lignes : 400
-- ID_client_lot — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+Nombre de lignes : 412
+- ID_client_lot — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 412.
    Confidentialité : RGPD
    Description : Identifiant client/lot
    Format / valeurs indicatives : CLT-AC-026905-LOT-AC-014311
    Exemples : CLT-AJ-003301-LOT-AJ-000001 ; CLT-AC-003302-LOT-AC-000002 ; CLT-BSH-003303-LOT-BSH-000003
-- ID_client — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 320.
+- ID_client — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 332.
    Confidentialité : RGPD
    Description : Client
    Format / valeurs indicatives : AC-003301
    Exemples : AJ-003301 ; AC-003302 ; BSH-003303
-- ID_lot — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+- ID_lot — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 400.
    Description : Lot
    Format / valeurs indicatives : AC-001752
    Exemples : AJ-000001 ; AC-000002 ; BSH-000003
-- Type_pivot — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 1.
+- Type_pivot — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 1.
    Description : Type de rattachement
    Format / valeurs indicatives : LOT / CLT-LOT / CLT
    Exemples : CLT-LOT
    Valeurs observées (effectif) : CLT-LOT (400)
-- Date_actualisation — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+- Date_actualisation — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 401.
    Description : Mise à jour
    Exemples : 2025-01-01 12:00:00.000 ; 2025-01-02 12:00:00.000 ; 2025-01-03 12:00:00.000
    Format observé : AAAA-MM-JJ hh:mm:ss.fff
@@ -2643,214 +2643,214 @@ Nombre de lignes : 900
    Format observé : AAAA-MM-JJ hh:mm:ss.fff
 
 ## Occupant
-Nombre de lignes : 400
-- ID_occupant — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+Nombre de lignes : 412
+- ID_occupant — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 412.
    Confidentialité : RGPD
    Description : Identifiant
    Format / valeurs indicatives : Code_societe-Code_occupant (AC-000022769)
    Exemples : AJ-003301-OCC-0001 ; AC-003302-OCC-0002 ; BSH-003303-OCC-0003
-- ID_client — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 320.
+- ID_client — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 332.
    Confidentialité : RGPD
    Description : Client de rattachement
    Format / valeurs indicatives : AC-003301
    Exemples : AJ-003301 ; AC-003302 ; BSH-003303
-- Code_societe — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 4.
+- Code_societe — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 4.
    Description : Société
    Format / valeurs indicatives : AJ / AC / BSH / MF1
    Exemples : AJ ; AC ; BSH
    Valeurs observées (effectif) : MF1 (100) ; BSH (100) ; AJ (100) ; AC (100)
-- Code_client — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 320.
+- Code_client — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 332.
    Confidentialité : RGPD
    Description : Code client
    Format / valeurs indicatives : 6 chiffres
    Exemples : 003301 ; 003302 ; 003303
    Format observé : 999999 (ex. 003301)
-- Code_occupant — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+- Code_occupant — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 412.
    Confidentialité : RGPD
    Description : Code occupant
    Format / valeurs indicatives : 9 chiffres
    Exemples : O000001 ; O000002 ; O000003
    Format observé : A999999 (ex. O000001)
-- Date_debut_rattachement_client — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+- Date_debut_rattachement_client — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 401.
    Confidentialité : RGPD
    Description : Début de rattachement
    Format / valeurs indicatives : AAAA-MM-JJ
    Exemples : 2018-01-01 ; 2019-02-03 ; 2020-03-05
    Format observé : AAAA-MM-JJ
-- Date_fin_rattachement_client — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 2.
+- Date_fin_rattachement_client — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 2.
    Confidentialité : RGPD
    Description : Fin de rattachement
    Format / valeurs indicatives : AAAA-MM-JJ
    Exemples : 2025-12-31 ; 2099-12-31
    Valeurs observées (effectif) : 2099-12-31 (320) ; 2025-12-31 (80)
-- Indicateur_rattachement_client — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 1.
+- Indicateur_rattachement_client — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 1.
    Confidentialité : RGPD
    Description : Rattaché au client
    Format / valeurs indicatives : Oui / Non
    Exemples : Oui
    Valeurs observées (effectif) : Oui (400)
-- Indicateur_rattachement_menage — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 1.
+- Indicateur_rattachement_menage — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 1.
    Confidentialité : RGPD
    Description : Rattaché au ménage
    Format / valeurs indicatives : Oui / Non
    Exemples : Oui
    Valeurs observées (effectif) : Oui (400)
-- Qualification_occupant — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 1.
+- Qualification_occupant — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 1.
    Confidentialité : RGPD
    Description : Qualification
    Format / valeurs indicatives : Contactant / Occupant
    Exemples : Occupant
    Valeurs observées (effectif) : Occupant (400)
-- Indicateur_rattachement_fiscal — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 1.
+- Indicateur_rattachement_fiscal — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 1.
    Confidentialité : RGPD
    Description : Rattachement fiscal
    Format / valeurs indicatives : Oui / Non
    Exemples : Oui
    Valeurs observées (effectif) : Oui (400)
-- Indicateur_garde_alternee — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 1.
+- Indicateur_garde_alternee — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 1.
    Confidentialité : RGPD
    Description : Garde alternée
    Format / valeurs indicatives : Oui / Non
    Exemples : Non
    Valeurs observées (effectif) : Non (400)
-- Indicateur_droit_de_visite — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 2.
+- Indicateur_droit_de_visite — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 2.
    Confidentialité : RGPD
    Description : Droit de visite
    Format / valeurs indicatives : Oui / Non
    Exemples : Oui ; Non
    Valeurs observées (effectif) : Non (266) ; Oui (134)
-- Indicateur_carte_mobilite_inclusion — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 1.
+- Indicateur_carte_mobilite_inclusion — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 1.
    Confidentialité : RGPD
    Description : Carte mobilité inclusion
    Format / valeurs indicatives : Oui / Non
    Exemples : Non
    Valeurs observées (effectif) : Non (400)
-- Type_personne — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 1.
+- Type_personne — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 2.
    Confidentialité : RGPD
    Description : Type de personne
    Format / valeurs indicatives : Physique / Morale
    Exemples : Physique
-   Valeurs observées (effectif) : Physique (400)
-- Code_forme_juridique_occupant — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 1.
+   Valeurs observées (effectif) : Physique (395) ; Morale (17)
+- Code_forme_juridique_occupant — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 2.
    Confidentialité : RGPD
    Description : Forme juridique (code)
    Format / valeurs indicatives : 2 à 4 lettres majuscules
    Exemples : PHYS
    Valeurs observées (effectif) : PHYS (400)
-- Libelle_forme_juridique_occupant — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 3.
+- Libelle_forme_juridique_occupant — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 7.
    Confidentialité : RGPD
    Description : Forme juridique (voir *Points d'attention*)
    Format / valeurs indicatives : Monsieur / Madame / Maire / Entreprise / Agence / SARL / SCCV / Société
    Exemples : Monsieur ; Madame ; Maire
-   Valeurs observées (effectif) : Monsieur (134) ; Maire (133) ; Madame (133)
-- Libelle_titre_occupant — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 3.
+   Valeurs observées (effectif) : Madame (134) ; Maire (133) ; Monsieur (133) ; Association (4) ; SCI (4) ; SARL (2) ; SAS (2)
+- Libelle_titre_occupant — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 2.
    Confidentialité : RGPD
    Description : Titre/raison (voir *Points d'attention*)
    Format / valeurs indicatives : ST AVE CASSIOPEE, MAIRIE CLÉGUER, BOTREL SAS
    Exemples : Monsieur ; Madame ; Mademois.
    Valeurs observées (effectif) : Monsieur (134) ; Mademois. (133) ; Madame (133)
-- Raison_sociale_occupant — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 3.
+- Raison_sociale_occupant — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 19.
    Confidentialité : RGPD
    Description : Voir *Points d'attention*
    Format / valeurs indicatives : MR / MME / MLLE / STE
    Exemples : MR ; MME ; MLLE
    Valeurs observées (effectif) : MR (134) ; MME (133) ; MLLE (133)
-- Code_titre_occupant — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 3.
+- Code_titre_occupant — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 2.
    Confidentialité : RGPD
    Description : Voir *Points d'attention*
    Format / valeurs indicatives : Monsieur / Madame / Mademois. / Société
    Exemples : Monsieur ; Madame ; Mademois.
    Valeurs observées (effectif) : Monsieur (134) ; Mademois. (133) ; Madame (133)
-- Nom_occupant — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 16.
+- Nom_occupant — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 147.
    Confidentialité : RGPD
    Description : Nom
    Exemples : MARTIN ; BERNARD ; DUBOIS
    Valeurs observées (effectif) : THOMAS (25) ; SIMON (25) ; ROBERT (25) ; RICHARD (25) ; PETIT (25) ; MOREAU (25) ; MICHEL (25) ; MARTIN (25) ; LEROY (25) ; LEFEVRE (25) ; LAURENT (25) ; GARCIA (25) ; DURAND (25) ; DUBOIS (25) ; DAVID (25) ; BERNARD (25)
-- Prenom_occupant — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 16.
+- Prenom_occupant — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 95.
    Confidentialité : RGPD
    Description : Prénom
    Exemples : Jean ; Marie ; Lucas
    Valeurs observées (effectif) : Thomas (25) ; Sarah (25) ; Paul (25) ; Nicolas (25) ; Marie (25) ; Manon (25) ; Lucas (25) ; Louis (25) ; Lea (25) ; Julie (25) ; Jean (25) ; Hugo (25) ; Emma (25) ; Chloe (25) ; Camille (25) ; Antoine (25)
-- Age_occupant — Type SQLite : INTEGER. NULL observés : non (0/400). Valeurs distinctes non NULL : 46.
+- Age_occupant — Type SQLite : INTEGER. NULL observés : oui (12/412). Valeurs distinctes non NULL : 72.
    Confidentialité : RGPD
    Description : Âge
    Format / valeurs indicatives : 1 à 150
    Exemples : 56 ; 55 ; 54
    Plage observée : 11 à 90
-- Classe_age_occupant — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 3.
+- Classe_age_occupant — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 5.
    Confidentialité : RGPD
    Description : Tranche d'âge
    Format / valeurs indicatives : 18 ans et moins / 18-29 ans / 30-44 ans / 45-64 ans / 65 ans et plus / NULL
    Exemples : 30-44 ans ; 18-29 ans ; 18 ans et moins
    Valeurs observées (effectif) : 18 ans et moins (164) ; 18-29 ans (112) ; 30-44 ans (65) ; 65 ans et plus (59)
-- Majorite_occupant — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 2.
+- Majorite_occupant — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 2.
    Confidentialité : RGPD
    Description : Majeur
    Format / valeurs indicatives : Oui / Non
    Exemples : Oui ; Non
    Valeurs observées (effectif) : Oui (349) ; Non (51)
-- Date_naissance_occupant — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+- Date_naissance_occupant — Type SQLite : TEXT. NULL observés : oui (13/412). Valeurs distinctes non NULL : 399.
    Confidentialité : RGPD
    Description : Naissance
    Format / valeurs indicatives : AAAA-MM-JJ
    Exemples : 1970-01-01 ; 1971-02-03 ; 1972-03-05
    Format observé : AAAA-MM-JJ
-- Date_deces_occupant — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 1.
+- Date_deces_occupant — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 1.
    Confidentialité : RGPD
    Description : Décès
    Format / valeurs indicatives : AAAA-MM-JJ ou NULL
    Exemples : 2099-12-31
    Valeurs observées (effectif) : 2099-12-31 (400)
-- Sexe_occupant — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 2.
+- Sexe_occupant — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 2.
    Confidentialité : RGPD
    Description : Sexe
    Format / valeurs indicatives : M / F
    Exemples : M ; F
    Valeurs observées (effectif) : M (200) ; F (200)
-- Indicateur_revenus_imposables_occupant — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 1.
+- Indicateur_revenus_imposables_occupant — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 1.
    Confidentialité : RGPD
    Description : Revenus imposables connus
    Format / valeurs indicatives : Oui / Non
    Exemples : Oui
    Valeurs observées (effectif) : Oui (400)
-- Annee_revenus_imposables_occupant — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 1.
+- Annee_revenus_imposables_occupant — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 1.
    Confidentialité : RGPD
    Description : Année des revenus
    Format / valeurs indicatives : AAAA
    Exemples : 2025-01-01
    Valeurs observées (effectif) : 2025-01-01 (400)
-- Montant_revenus_imposables_occupant — Type SQLite : INTEGER. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+- Montant_revenus_imposables_occupant — Type SQLite : INTEGER. NULL observés : oui (12/412). Valeurs distinctes non NULL : 400.
    Confidentialité : RGPD
    Description : Montant des revenus imposables
    Exemples : 18000 ; 18001 ; 18002
    Plage observée : 18000 à 18399
-- Situation_famille_occupant — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 4.
+- Situation_famille_occupant — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 4.
    Confidentialité : RGPD
    Description : Situation familiale
    Format / valeurs indicatives : Union libre - concubin / Pacsé(e) / Veuf(ve) / Célibataire / Divorcé(e) / Marié(e) / Séparé(e) / NULL
    Exemples : Célibataire ; Marié(e) ; Pacsé(e)
    Valeurs observées (effectif) : Pacsé(e) (100) ; Marié(e) (100) ; Divorcé(e) (100) ; Célibataire (100)
-- Libelle_detail_lien_rattachement — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 4.
+- Libelle_detail_lien_rattachement — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 4.
    Confidentialité : RGPD
    Description : Lien de rattachement
    Format / valeurs indicatives : Enfant / Pacsé(e) / Parent / Colocataire / A charge / Autres (colocataire…) / Conjoint / Concubin
    Exemples : Conjoint ; Enfant ; Parent
    Valeurs observées (effectif) : Parent (100) ; Enfant (100) ; Conjoint (100) ; Colocataire (100)
-- Code_occupant_de_rattachement — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 50.
+- Code_occupant_de_rattachement — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 50.
    Confidentialité : RGPD
    Description : Occupant de référence
    Format / valeurs indicatives : 9 chiffres
    Exemples : O000001 ; O000002 ; O000003
    Format observé : A999999 (ex. O000001)
-- Date_actualisation — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+- Date_actualisation — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 401.
    Description : Mise à jour
    Exemples : 2025-01-01 12:00:00.000 ; 2025-01-02 12:00:00.000 ; 2025-01-03 12:00:00.000
    Format observé : AAAA-MM-JJ hh:mm:ss.fff
 
-- Telephone_occupant — Type SQLite : TEXT.
+- Telephone_occupant — Type SQLite : TEXT. NULL observés : oui (25/412). Valeurs distinctes non NULL : 387.
    Confidentialité : RGPD
    Description : Numéro de téléphone de l'occupant. Colonne présente dans SQLite, ajoutée à la documentation après contrôle du schéma.
-- Mail_occupant — Type SQLite : TEXT.
+- Mail_occupant — Type SQLite : TEXT. NULL observés : oui (12/412). Valeurs distinctes non NULL : 400.
    Confidentialité : RGPD
    Description : Adresse e-mail de l'occupant. Colonne présente dans SQLite, ajoutée à la documentation après contrôle du schéma.
 
