@@ -1,5 +1,62 @@
 # Assistant de données métier — mcp-boutique
 
+Le bouton **Prévisions** ouvre deux prototypes ML locaux. Les modèles sont
+implémentés en Python standard (`boutique/apprentissage.py`) pour fonctionner
+sans bibliothèques natives sur les postes soumis au contrôle d'applications Windows.
+Ils n'utilisent aucune API payante et ne modifient pas la BDD métier.
+
+Le jeu fictif a été enrichi par `scripts/enrichir_historiques_predictions.py` :
+21 mois complets (janvier 2025–septembre 2026) pour 320 comptes clients, et trois
+ans de suivi simulé (octobre 2023–septembre 2026, à partir de la mise en service)
+pour 615 équipements. Les 871 pannes générées portent un `ID_equipement` explicite
+dans `Intervention`, `Indicateur_panne='Oui'` et `Origine_donnees`. Le suivi continu
+déclaré dans `Equipement` porte `Date_debut_observation`, `Date_fin_observation`
+et `Origine_observation`. Ces valeurs décrivent une simulation complète, jamais
+une collecte réelle. Les anciennes lignes restent inchangées ; la provenance et
+la graine sont conservées dans `Simulation_dataset`. Le générateur sauvegarde le
+DWH et le dictionnaire, travaille en transaction et peut être relancé sans doublon.
+Les mesures de performance sur ce jeu synthétique ne valident pas le modèle sur
+des situations réelles ; elles peuvent refléter les règles du générateur.
+
+- **Impayés** : régression Ridge (pénalité L2 = 10) sur l'évolution entre deux mois
+  consécutifs. Les variables financières accessibles au service sont imputées par
+  la médiane et standardisées sur le seul jeu d'apprentissage. La sortie est une
+  somme agrégée, jamais un score de client. La cohorte est fixe entre les mois
+  comparés ; un mois couvrant moins de 95 % du maximum de clients observés est
+  exclu du graphique comparable. Ce seuil ne garantit pas une complétude métier.
+  Le modèle prévoit uniquement le mois suivant les dernières données comparables,
+  sans extrapoler un historique ancien jusqu'au mois actuel. Un test chronologique
+  compare l'erreur moyenne à la référence « impayé inchangé » quand les données le
+  permettent. Aucun intervalle de confiance calibré n'est annoncé.
+- **Équipements** : régression logistique L2 sur des fenêtres non chevauchantes de
+  90 jours. Les pannes datées explicitement liées à l'équipement sont prioritaires
+  lorsque leurs colonnes et celles de la couverture du suivi sont accessibles.
+  Chaque fenêtre d'entraînement doit être intégralement couverte pour cet
+  équipement ; le score est calculé au dernier jour observé, sans inventer des
+  jours sans panne après ce jour. Sans ces champs, un mode indirect reste disponible : une commande mentionne une panne/HS et le
+  code d'intervention, l'objet et le type d'équipement doivent être cohérents. Le
+  rapprochement lot/type doit désigner un seul équipement déjà en service.
+  Contrôles sans panne, ambiguïtés et identifiants contradictoires sont exclus.
+  Seuls les types ayant au moins 10 signaux avant la période de test sont retenus.
+  Variables : âge, signaux antérieurs sur 90/365 jours, délai depuis le dernier
+  signal et type. La sortie est un **indice relatif de priorité de contrôle**, pas
+  une probabilité de panne physique : les scores du modèle sont classés entre les
+  équipements éligibles, en tenant compte des ex æquo. Le modèle n'est pas calibré.
+  L'AUC n'est affichée que si la période test contient au moins cinq positifs et
+  les deux classes ; sinon la qualité prédictive reste explicitement non établie.
+  En mode direct simulé, l'AUC est présentée comme une mesure sur des pannes
+  synthétiques, jamais comme une preuve de fiabilité sur des équipements réels.
+  Les types non couverts sont indiqués comme non estimables. Pour une vraie
+  estimation du risque, il faut un journal de pannes daté lié à `ID_equipement`,
+  une couverture d'observation vérifiée et des données réelles suffisantes.
+
+Les prédictions respectent les permissions de tables et de colonnes, vérifiées
+avant l'extraction et à nouveau avant de renvoyer le résultat. Les modèles sont
+réentraînés en mémoire à chaque consultation. Une extraction tronquée est refusée,
+et les observations équipement/période sont limitées à 20 000 pour ce prototype.
+La base actuelle est fictive : les résultats servent à la démonstration et à la
+validation technique. Tests : `python -m pytest test_predictions.py -q`.
+
 Le chat propose un espace collaborateur : **À traiter** regroupe les affaires en
 retard, commandes à relancer, diagnostics à renouveler, préavis, mandats de syndic
 et comptes à examiner. La date de référence est modifiable ; les dates des données

@@ -142,3 +142,50 @@ button:not(.p):not(.on):not(.btn):hover{border-color:var(--acc)}
 @media(max-width:540px){#workspace-dialog{width:100vw}.task-grid{grid-template-columns:1fr}.workspace-nav>span{display:none}.task-card{gap:8px}.workspace-header h2{font-size:21px}}
 @media(max-width:540px){.welcome-identity{min-width:200px;padding:18px;gap:18px;margin-bottom:20px}.welcome-identity img{width:108px;height:108px}.welcome-wordmark{font-size:42px}.workspace-nav>.app-brand{display:inline-flex;font-size:16px;gap:4px}.app-brand img{width:24px;height:24px}.workspace-nav{gap:6px}.workspace-nav button{padding:8px;font-size:11px}}
 @media(prefers-reduced-motion:reduce){#workspace-dialog[open]{animation:none}.task-card,.workspace-nav button,.welcome-shortcuts button,.result-tools button,.row-tools button,.tool-link,.evolution-button{transition:none}}
+.prediction-notice{margin:0 0 20px;padding:14px 16px;background:#fff1ed;border:1px solid #ffcabb;border-radius:12px;font-size:13px;line-height:1.6;color:#802e23}
+.prediction-local{margin-top:12px}.prediction-section{padding:22px;background:#fff;border:1px solid var(--bd);border-radius:16px;margin:20px 0}.prediction-section h3{font-size:20px;margin:0 0 10px}.prediction-period{font-size:13px;color:var(--mut);margin:0 0 16px}.prediction-caution{font-size:13px;line-height:1.6;color:#6e4b39;border-left:3px solid #ff8f6b;background:#fff8f2;padding:12px 14px}
+.prediction-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}.prediction-metrics>div{display:flex;flex-direction:column;gap:10px;padding:18px;background:#fafafa;border:1px solid var(--bd);border-radius:12px}.prediction-metrics small{font-size:12px;color:var(--mut)}.prediction-metrics strong{font-size:28px;letter-spacing:-.04em;color:#E62A00}.prediction-metrics span{font-size:12px;line-height:1.6;color:var(--mut)}
+.prediction-chart{height:280px;position:relative;margin:22px 0}.prediction-validation{font-size:13px;line-height:1.7;color:#55474a;background:#f8f6f6;border-radius:10px;padding:14px;margin:18px 0}.prediction-method{font-size:12px;line-height:1.7;margin-top:18px}.prediction-method>summary{font-weight:700;cursor:pointer}.prediction-method li{margin:8px 0}.prediction-method .tw{margin-top:12px}.prediction-row{background:#fff1ed;font-weight:700}
+@media(max-width:760px){.prediction-section{padding:16px}.prediction-metrics{grid-template-columns:1fr}.prediction-metrics>div{gap:6px;padding:14px}.prediction-chart{height:240px}}
+/* L'accueil s'adapte à la place disponible entre les outils et la saisie. */
+body:has(#main){height:100dvh}
+#main,#thread{min-height:0}
+.workspace-nav,#bar{flex-shrink:0}
+#thread:has(>.welcome){overflow:hidden;container-type:size;padding:clamp(8px,2dvh,24px) clamp(12px,2vw,24px)}
+#thread>.welcome{padding:0;flex-shrink:0}
+@container(max-height:620px){
+  .welcome-identity{flex-direction:row;min-width:0;padding:12px 20px;gap:16px;margin-bottom:16px}
+  .welcome-identity img{width:72px;height:72px}
+  .welcome-wordmark{font-size:40px}
+  .welcome h1{font-size:28px}
+  .welcome>p:not(.welcome-eyebrow){margin:10px 0 16px}
+  .welcome-shortcuts{margin-bottom:16px}
+  .welcome small{margin-top:12px}
+  .suggestion{padding:12px}
+  .suggestion strong{margin-bottom:6px}
+}
+@container(max-height:480px){
+  .welcome>p,.welcome-shortcuts,.welcome small{display:none}
+  .welcome h1{font-size:24px;margin-bottom:16px}
+  .welcome-identity{padding:8px 16px;margin-bottom:12px}
+  .welcome-identity img{width:56px;height:56px}
+  .welcome-wordmark{font-size:34px}
+  .suggestions{gap:8px}
+  .suggestion>span{line-height:1.4}
+}
+@container(max-height:420px){
+  .suggestion>span{display:none}
+  .suggestion strong{margin:0}
+  .suggestion{padding:10px 12px}
+  .welcome h1{font-size:22px;margin-bottom:12px}
+}
+@container(max-height:240px){
+  .welcome-identity{padding:0;background:transparent;margin-bottom:8px}
+  .welcome-identity img{width:40px;height:40px}
+  .welcome-wordmark{font-size:28px}
+  .welcome h1{font-size:20px;margin-bottom:8px}
+  .suggestions{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  .suggestion{padding:8px}
+  .suggestion strong{font-size:12px;gap:4px}
+}
+@container(max-height:180px){.welcome-identity{display:none}}

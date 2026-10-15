@@ -1,6 +1,8 @@
 DICTIONNAIRE DE DONNÉES
 Base fictive DWH — SQLite
-Ce document décrit la structure de la base SQLite générée à partir du script de données fictives. Version 2 : enrichie (guide d'utilisation, jointures validées, valeurs observées par colonne, anomalies connues). La base contient 28 tables et 10 000 lignes au total.
+Ce document décrit la structure de la base SQLite générée à partir du script de données fictives. Version 2 : enrichie (guide d'utilisation, jointures validées, valeurs observées par colonne, anomalies connues). La base contient 29 tables et 17 773 lignes au total.
+
+Les historiques ajoutés portent Origine_donnees ou Origine_observation = « Simulation predictions v1 — graine 20261015 ». Ils servent uniquement à une démonstration ML. Les données originales sont conservées.
 
 ## GUIDE D'UTILISATION (à lire avant d'écrire une requête)
 
@@ -1054,196 +1056,198 @@ Nombre de lignes : 30
    Format observé : AAAA-MM-JJ hh:mm:ss.fff
 
 ## Commande
-Nombre de lignes : 300
-- ID_commande — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 300.
+Nombre de lignes : 1171
+- ID_commande — Type SQLite : TEXT. NULL observés : non (0/1171). Valeurs distinctes non NULL : 1171.
    Description : Identifiant
    Format / valeurs indicatives : Code_societe-Numero_commande (AC-011065)
    Exemples : AJ-011065 ; AC-011066 ; BSH-011067
-- Code_societe — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 4.
+- Code_societe — Type SQLite : TEXT. NULL observés : non (0/1171). Valeurs distinctes non NULL : 4.
    Description : Société
    Format / valeurs indicatives : AJ / AC / BSH / MF1
    Exemples : AJ ; AC ; BSH
-   Valeurs observées (effectif) : MF1 (75) ; BSH (75) ; AJ (75) ; AC (75)
-- Numero_commande — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 300.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : AC (314) ; AJ (308) ; MF1 (292) ; BSH (257)
+- Numero_commande — Type SQLite : TEXT. NULL observés : non (0/1171). Valeurs distinctes non NULL : 1171.
    Description : Numéro de commande
    Format / valeurs indicatives : 6 chiffres
    Exemples : 011065 ; 011066 ; 011067
    Format observé : 999999 (ex. 011065)
-- ID_organisation — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 30.
+- ID_organisation — Type SQLite : TEXT. NULL observés : oui (871/1171). Valeurs distinctes non NULL : 30.
    Description : Organisation
    Format / valeurs indicatives : AC-R2-01-08
    Exemples : AJ-R1-01-01 ; AC-R2-02-02 ; BSH-R3-03-03
-- Code_niveau_organisation_1 — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 8.
+- Code_niveau_organisation_1 — Type SQLite : TEXT. NULL observés : oui (871/1171). Valeurs distinctes non NULL : 8.
    Description : Organisation niveau 1
    Format / valeurs indicatives : 2 à 4 caractères
    Exemples : R1 ; R2 ; R3
-   Valeurs observées (effectif) : R6 (40) ; R5 (40) ; R4 (40) ; R3 (40) ; R2 (40) ; R1 (40) ; R8 (30) ; R7 (30)
-- Code_niveau_organisation_2 — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 9.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : R1 (40) ; R2 (40) ; R3 (40) ; R4 (40) ; R5 (40) ; R6 (40) ; R7 (30) ; R8 (30)
+- Code_niveau_organisation_2 — Type SQLite : TEXT. NULL observés : oui (871/1171). Valeurs distinctes non NULL : 9.
    Description : Organisation niveau 2
    Format / valeurs indicatives : 01 / 02 / 03 / 04 / 05 / 09 / BR
    Exemples : 01 ; 02 ; 03
-   Valeurs observées (effectif) : 03 (40) ; 02 (40) ; 01 (40) ; 09 (30) ; 08 (30) ; 07 (30) ; 06 (30) ; 05 (30) ; 04 (30)
-- Code_niveau_organisation_3 — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 12.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 01 (40) ; 02 (40) ; 03 (40) ; 04 (30) ; 05 (30) ; 06 (30) ; 07 (30) ; 08 (30) ; 09 (30)
+- Code_niveau_organisation_3 — Type SQLite : TEXT. NULL observés : oui (871/1171). Valeurs distinctes non NULL : 12.
    Description : Organisation niveau 3
    Format / valeurs indicatives : 01 … 09 / 11 / 12
    Exemples : 01 ; 02 ; 03
-   Valeurs observées (effectif) : 06 (30) ; 05 (30) ; 04 (30) ; 03 (30) ; 02 (30) ; 01 (30) ; 12 (20) ; 11 (20) ; 10 (20) ; 09 (20) ; 08 (20) ; 07 (20)
-- Code_niveau_patrimoine_1 — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 80.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 01 (30) ; 02 (30) ; 03 (30) ; 04 (30) ; 05 (30) ; 06 (30) ; 07 (20) ; 08 (20) ; 09 (20) ; 10 (20)
+- Code_niveau_patrimoine_1 — Type SQLite : TEXT. NULL observés : oui (871/1171). Valeurs distinctes non NULL : 80.
    Description : Patrimoine niveau 1
    Format / valeurs indicatives : 3 ou 4 caractères
    Exemples : AJ01 ; AC02 ; BS03
    Format observé : AA99 (ex. AJ01)
-- Code_niveau_patrimoine_2 — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 9.
+- Code_niveau_patrimoine_2 — Type SQLite : TEXT. NULL observés : oui (871/1171). Valeurs distinctes non NULL : 9.
    Description : Patrimoine niveau 2
    Format / valeurs indicatives : 1 à 3 caractères
    Exemples : 01 ; 02 ; 03
-   Valeurs observées (effectif) : 06 (34) ; 05 (34) ; 04 (34) ; 03 (34) ; 02 (34) ; 01 (34) ; 08 (33) ; 07 (33) ; 09 (30)
-- Code_niveau_patrimoine_3 — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 12.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 01 (34) ; 02 (34) ; 03 (34) ; 04 (34) ; 05 (34) ; 06 (34) ; 07 (33) ; 08 (33) ; 09 (30)
+- Code_niveau_patrimoine_3 — Type SQLite : TEXT. NULL observés : oui (871/1171). Valeurs distinctes non NULL : 12.
    Description : Patrimoine niveau 3
    Format / valeurs indicatives : 1 à 3 caractères
    Exemples : 01 ; 02 ; 03
-   Valeurs observées (effectif) : 08 (26) ; 07 (26) ; 06 (26) ; 05 (26) ; 04 (26) ; 03 (26) ; 02 (26) ; 01 (26) ; 12 (23) ; 11 (23) ; 10 (23) ; 09 (23)
-- Code_lot — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 300.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 01 (26) ; 02 (26) ; 03 (26) ; 04 (26) ; 05 (26) ; 06 (26) ; 07 (26) ; 08 (26) ; 09 (23) ; 10 (23)
+- Code_lot — Type SQLite : TEXT. NULL observés : non (0/1171). Valeurs distinctes non NULL : 375.
    Description : Lot concerné
    Format / valeurs indicatives : Nombre à 6 chiffres
    Exemples : 000001 ; 000002 ; 000003
    Format observé : 999999 (ex. 000001)
-- Type_commande — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 3.
+- Type_commande — Type SQLite : TEXT. NULL observés : non (0/1171). Valeurs distinctes non NULL : 4.
    Description : Code du type de commande
    Format / valeurs indicatives : 3 lettres majuscules
    Exemples : FOY ; COM ; INF
-   Valeurs observées (effectif) : INF (100) ; FOY (100) ; COM (100)
-- Libelle_type_commande — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 3.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : SIM (871) ; COM (100) ; FOY (100) ; INF (100)
+- Libelle_type_commande — Type SQLite : TEXT. NULL observés : non (0/1171). Valeurs distinctes non NULL : 4.
    Description : Libellé du type
    Format / valeurs indicatives : Cde Foyers Mandat GOP / Cde Mandat commercial / Cde Informatique
    Exemples : Cde Foyers Mandat GOP ; Cde Mandat commercial ; Cde Informatique
-   Valeurs observées (effectif) : Cde Mandat commercial (100) ; Cde Informatique (100) ; Cde Foyers Mandat GOP (100)
-- Libelle_objet_commande_1 — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 3.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Maintenance corrective simulée (871) ; Cde Foyers Mandat GOP (100) ; Cde Informatique (100) ; Cde Mandat commercial (100)
+- Libelle_objet_commande_1 — Type SQLite : TEXT. NULL observés : non (0/1171). Valeurs distinctes non NULL : 8.
    Confidentialité : RGPD
    Description : Objet (ligne 1)
    Format / valeurs indicatives : cellule ascenseur HS
    Exemples : cellule ascenseur HS ; Remplacement robinet ; Controle VMC
-   Valeurs observées (effectif) : cellule ascenseur HS (100) ; Remplacement robinet (100) ; Controle VMC (100)
-- Libelle_objet_commande_2 — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 1.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Panne Ascenseur — simulation (534) ; Panne Chaudiere — simulation (113) ; Controle VMC (100) ; Remplacement robinet (100) ; cellule ascenseur HS (100) ; Panne VMC — simulation (82) ; Panne Porte — simulation (77) ; Panne Tableau electrique — simulation (65)
+- Libelle_objet_commande_2 — Type SQLite : TEXT. NULL observés : oui (871/1171). Valeurs distinctes non NULL : 1.
    Confidentialité : RGPD
    Description : Objet (ligne 2)
    Exemples : Intervention technique
-   Valeurs observées (effectif) : Intervention technique (300)
-- Commentaire_commande — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 1.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Intervention technique (300)
+- Commentaire_commande — Type SQLite : TEXT. NULL observés : non (0/1171). Valeurs distinctes non NULL : 394.
    Confidentialité : RGPD
    Description : Commentaire
    Format / valeurs indicatives : Une intervention est programmée le 30/10
    Exemples : Une intervention est programmee le 30/10
-   Valeurs observées (effectif) : Une intervention est programmee le 30/10 (300)
-- Montant_HT — Type SQLite : INTEGER. NULL observés : non (0/300). Valeurs distinctes non NULL : 100.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Une intervention est programmee le 30/10 (300) ; Exemple fictif lié à AJ-000105-EQ-9057. (9) ; Exemple fictif lié à MF1-000312-EQ-9168. (8) ; Exemple fictif lié à AC-000010-EQ-9005. (7) ; Exemple fictif lié à AJ-000169-EQ-9090. (7) ; Exemple fictif lié à BSH-000375-EQ-9202. (7) ; Exemple fictif lié à MF1-000304-EQ-9165. (7) ; Exemple fictif lié à AC-000222-EQ-9120. (6) ; Exemple fictif lié à AJ-000277-EQ-9151. (6) ; Exemple fictif lié à AJ-000349-EQ-9188. (6)
+- Montant_HT — Type SQLite : INTEGER. NULL observés : non (0/1171). Valeurs distinctes non NULL : 968.
    Description : Montant HT
    Exemples : 500 ; 535 ; 570
    Plage observée : 500 à 3965
-- Montant_TVA — Type SQLite : INTEGER. NULL observés : non (0/300). Valeurs distinctes non NULL : 100.
+- Montant_TVA — Type SQLite : INTEGER. NULL observés : non (0/1171). Valeurs distinctes non NULL : 952.
    Description : Montant de TVA
    Exemples : 100 ; 107 ; 114
    Plage observée : 100 à 793
-- Montant_TTC — Type SQLite : INTEGER. NULL observés : non (0/300). Valeurs distinctes non NULL : 100.
+- Montant_TTC — Type SQLite : INTEGER. NULL observés : non (0/1171). Valeurs distinctes non NULL : 968.
    Description : Montant TTC
    Exemples : 600 ; 642 ; 684
    Plage observée : 600 à 4758
-- Code_tiers — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 300.
+- Code_tiers — Type SQLite : TEXT. NULL observés : oui (871/1171). Valeurs distinctes non NULL : 300.
    Confidentialité : RGPD
    Description : Code du fournisseur
    Format / valeurs indicatives : 9 chiffres
    Exemples : 400000000 ; 400000001 ; 400000002
    Format observé : 999999999 (ex. 400000000)
-- Libelle_tiers — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 2.
+- Libelle_tiers — Type SQLite : TEXT. NULL observés : oui (871/1171). Valeurs distinctes non NULL : 2.
    Confidentialité : RGPD
    Description : Nom du fournisseur
    Format / valeurs indicatives : ARMOR EVASION / HOMIWOO
    Exemples : ARMOR EVASION ; HOMIWOO
-   Valeurs observées (effectif) : HOMIWOO (150) ; ARMOR EVASION (150)
-- Telephone_fixe_tiers — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 300.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : ARMOR EVASION (150) ; HOMIWOO (150)
+- Telephone_fixe_tiers — Type SQLite : TEXT. NULL observés : oui (871/1171). Valeurs distinctes non NULL : 300.
    Confidentialité : RGPD
    Description : Téléphone fixe
    Format / valeurs indicatives : 10 chiffres
    Exemples : 0299000000 ; 0299000001 ; 0299000002
-- Telephone_portable_tiers — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 300.
+- Telephone_portable_tiers — Type SQLite : TEXT. NULL observés : oui (871/1171). Valeurs distinctes non NULL : 300.
    Confidentialité : RGPD
    Description : Téléphone portable
    Format / valeurs indicatives : 10 chiffres
    Exemples : 0699000000 ; 0699000001 ; 0699000002
-- Mail_tiers — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 300.
+- Mail_tiers — Type SQLite : TEXT. NULL observés : oui (871/1171). Valeurs distinctes non NULL : 300.
    Confidentialité : RGPD
    Description : E-mail du tiers
    Format / valeurs indicatives : sav@lepage-electronique.com
    Exemples : sav.fournisseur0@local.test ; sav.fournisseur1@local.test ; sav.fournisseur2@local.test
-- Code_collaborateur_executant_commande — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 30.
+- Code_collaborateur_executant_commande — Type SQLite : TEXT. NULL observés : oui (871/1171). Valeurs distinctes non NULL : 30.
    Confidentialité : RGPD
    Description : Collaborateur exécutant
    Format / valeurs indicatives : 2 ou 3 caractères (lettres majuscules et chiffres)
    Exemples : C001 ; C002 ; C003
    Format observé : A999 (ex. C001)
-- Code_utilisateur_executant_commande — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 300.
+- Code_utilisateur_executant_commande — Type SQLite : TEXT. NULL observés : oui (871/1171). Valeurs distinctes non NULL : 300.
    Confidentialité : RGPD
    Description : Utilisateur exécutant (type non précisé dans le PDF)
    Exemples : USR000 ; USR001 ; USR002
    Format observé : AAA999 (ex. USR000)
-- Date_enregistrement_commande — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 300.
+- Date_enregistrement_commande — Type SQLite : TEXT. NULL observés : non (0/1171). Valeurs distinctes non NULL : 901.
    Description : Enregistrement
    Exemples : 2025-01-01 00:00:00.000 ; 2025-01-02 01:07:13.000 ; 2025-01-03 02:14:26.000
    Format observé : AAAA-MM-JJ hh:mm:ss.fff
-- Date_signature_commande — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 300.
+- Date_signature_commande — Type SQLite : TEXT. NULL observés : non (0/1171). Valeurs distinctes non NULL : 901.
    Description : Signature
    Exemples : 2025-01-03 00:00:00.000 ; 2025-01-04 01:07:13.000 ; 2025-01-05 02:14:26.000
    Format observé : AAAA-MM-JJ hh:mm:ss.fff
-- Date_debut_execution_commande — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 300.
+- Date_debut_execution_commande — Type SQLite : TEXT. NULL observés : non (0/1171). Valeurs distinctes non NULL : 901.
    Description : Début d'exécution
    Exemples : 2025-01-06 00:00:00.000 ; 2025-01-07 01:07:13.000 ; 2025-01-08 02:14:26.000
    Format observé : AAAA-MM-JJ hh:mm:ss.fff
-- Date_fin_execution_commande — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 300.
+- Date_fin_execution_commande — Type SQLite : TEXT. NULL observés : non (0/1171). Valeurs distinctes non NULL : 902.
    Description : Fin d'exécution
    Exemples : 2025-01-16 00:00:00.000 ; 2025-01-18 01:07:13.000 ; 2025-01-20 02:14:26.000
    Format observé : AAAA-MM-JJ hh:mm:ss.fff
-- Nombre_jours_depuis_commande — Type SQLite : INTEGER. NULL observés : non (0/300). Valeurs distinctes non NULL : 300.
+- Nombre_jours_depuis_commande — Type SQLite : INTEGER. NULL observés : oui (871/1171). Valeurs distinctes non NULL : 300.
    Description : Jours depuis la commande
    Exemples : 645 ; 644 ; 643
    Plage observée : 346 à 645
-- Indicateur_categorie_delai_commande — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 1.
+- Indicateur_categorie_delai_commande — Type SQLite : TEXT. NULL observés : oui (871/1171). Valeurs distinctes non NULL : 1.
    Description : Catégorie de délai
    Format / valeurs indicatives : Inférieur ou égal à 30 jours / Supérieur à 30 jours
    Exemples : Inférieur ou égal à 30 jours
-   Valeurs observées (effectif) : Inférieur ou égal à 30 jours (300)
-- Taux_execution_commande — Type SQLite : INTEGER. NULL observés : non (0/300). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Inférieur ou égal à 30 jours (300)
+- Taux_execution_commande — Type SQLite : INTEGER. NULL observés : non (0/1171). Valeurs distinctes non NULL : 3.
    Description : Taux d'exécution (%)
    Format / valeurs indicatives : 0 à 100
    Exemples : 50 ; 100
-   Valeurs observées (effectif) : 100 (240) ; 50 (60)
-- Libelle_etat_commande — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 3.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 100 (1109) ; 50 (60) ; 0 (2)
+- Libelle_etat_commande — Type SQLite : TEXT. NULL observés : non (0/1171). Valeurs distinctes non NULL : 4.
    Description : État de la commande
    Format / valeurs indicatives : Partiellement soldée / Enregistrement / Non soldée / En cours / NULL
    Exemples : En cours ; Partiellement soldée ; Non soldée
-   Valeurs observées (effectif) : Partiellement soldée (100) ; Non soldée (100) ; En cours (100)
-- Indicateur_charge_a_payer — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Soldée (869) ; En cours (102) ; Non soldée (100) ; Partiellement soldée (100)
+- Indicateur_charge_a_payer — Type SQLite : TEXT. NULL observés : oui (871/1171). Valeurs distinctes non NULL : 2.
    Description : Charge à payer
    Format / valeurs indicatives : Oui / Non
    Exemples : Oui ; Non
-   Valeurs observées (effectif) : Non (225) ; Oui (75)
-- Statut_commande — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 4.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Non (225) ; Oui (75)
+- Statut_commande — Type SQLite : TEXT. NULL observés : non (0/1171). Valeurs distinctes non NULL : 4.
    Description : Code du statut
    Format / valeurs indicatives : TRX / ANN / ENR / MOD / SLD / BON
    Exemples : TRX ; ENR ; SLD
-   Valeurs observées (effectif) : TRX (75) ; SLD (75) ; ENR (75) ; BON (75)
-- Libelle_statut_commande — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 4.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : TRX (944) ; ENR (77) ; BON (75) ; SLD (75)
+- Libelle_statut_commande — Type SQLite : TEXT. NULL observés : non (0/1171). Valeurs distinctes non NULL : 4.
    Description : Libellé du statut
    Format / valeurs indicatives : Annulée / Bon commande édité / Enregistrée / Modifiée / Exécutée / Soldée / NULL
    Exemples : Exécutée ; Enregistrée ; Soldée
-   Valeurs observées (effectif) : Soldée (75) ; Exécutée (75) ; Enregistrée (75) ; Bon commande édité (75)
-- Lien_IKOS_commande — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 300.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Exécutée (944) ; Enregistrée (77) ; Bon commande édité (75) ; Soldée (75)
+- Lien_IKOS_commande — Type SQLite : TEXT. NULL observés : oui (871/1171). Valeurs distinctes non NULL : 300.
    Confidentialité : RGPD
    Description : Lien IKOS
    Format / valeurs indicatives : https://…
    Exemples : https://ikos.local/commande/AJ-011065 ; https://ikos.local/commande/AC-011066 ; https://ikos.local/commande/BSH-011067
-- Date_actualisation — Type SQLite : TEXT. NULL observés : non (0/300). Valeurs distinctes non NULL : 300.
+- Date_actualisation — Type SQLite : TEXT. NULL observés : non (0/1171). Valeurs distinctes non NULL : 728.
    Description : Mise à jour
    Exemples : 2025-01-01 12:00:00.000 ; 2025-01-02 12:00:00.000 ; 2025-01-03 12:00:00.000
    Format observé : AAAA-MM-JJ hh:mm:ss.fff
+- Origine_donnees — Type SQLite : TEXT. NULL observés : oui (300/1171). Valeurs distinctes non NULL : 1.
+   Description : Origine explicite des lignes ajoutées. Simulation predictions v1 : données synthétiques, jamais des observations réelles.
 
 ## Commande_lot_pivot
 Nombre de lignes : 300
@@ -1769,175 +1773,181 @@ Nombre de lignes : 500
    Valeurs observées (effectif) : U (36) ; ST (36) ; RLX (36) ; ML (36) ; M2 (36) ; M (36) ; LG (36) ; H (36) ; FFT (36) ; F (36) ; CAL (36) ; M3 (35) ; % (35) ; E (34)
 
 ## Equipement
-Nombre de lignes : 400
-- ID_equipement — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+Nombre de lignes : 615
+- ID_equipement — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 615.
    Description : Identifiant
    Format / valeurs indicatives : Code_type_equipement-Code_niveau_patrimoine (CHIN-0008-KRA)
    Exemples : AJ-000001-EQ-0001 ; AC-000002-EQ-0002 ; BSH-000003-EQ-0003
-- ID_patrimoine_lot — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+- ID_patrimoine_lot — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 400.
    Description : Lot ou patrimoine d'implantation
    Format / valeurs indicatives : Format ID_lot ou ID_patrimoine
    Exemples : AJ-AJ01-01-01-AJ-000001 ; AC-AC02-02-02-AC-000002 ; BSH-BS03-03-03-BSH-000003
-- Code_societe — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 4.
+- Code_societe — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 4.
    Description : Société
    Format / valeurs indicatives : AJ / AC / BSH / MF1
    Exemples : AJ ; AC ; BSH
-   Valeurs observées (effectif) : MF1 (100) ; BSH (100) ; AJ (100) ; AC (100)
-- Code_niveau_patrimoine_1 — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 80.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : AJ (160) ; MF1 (160) ; AC (155) ; BSH (140)
+- Code_niveau_patrimoine_1 — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 80.
    Description : Patrimoine niveau 1
    Format / valeurs indicatives : 3 ou 4 caractères
    Exemples : AJ01 ; AC02 ; BS03
    Format observé : AA99 (ex. AJ01)
-- Code_niveau_patrimoine_2 — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 9.
+- Code_niveau_patrimoine_2 — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 9.
    Description : Patrimoine niveau 2
    Format / valeurs indicatives : 1 à 3 caractères
    Exemples : 01 ; 02 ; 03
-   Valeurs observées (effectif) : 08 (45) ; 07 (45) ; 06 (45) ; 05 (45) ; 04 (45) ; 03 (45) ; 02 (45) ; 01 (45) ; 09 (40)
-- Code_niveau_patrimoine_3 — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 12.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 08 (85) ; 01 (80) ; 06 (70) ; 07 (70) ; 02 (65) ; 04 (65) ; 09 (65) ; 03 (60) ; 05 (55)
+- Code_niveau_patrimoine_3 — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 12.
    Description : Patrimoine niveau 3
    Format / valeurs indicatives : 1 à 3 caractères
    Exemples : 01 ; 02 ; 03
-   Valeurs observées (effectif) : 08 (35) ; 07 (35) ; 06 (35) ; 05 (35) ; 04 (35) ; 03 (35) ; 02 (35) ; 01 (35) ; 12 (30) ; 11 (30) ; 10 (30) ; 09 (30)
-- Code_lot — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 08 (65) ; 07 (60) ; 01 (55) ; 05 (55) ; 10 (55) ; 02 (50) ; 06 (50) ; 09 (50) ; 12 (50) ; 03 (45)
+- Code_lot — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 400.
    Description : Lot
    Format / valeurs indicatives : 6 chiffres
    Exemples : 000001 ; 000002 ; 000003
    Format observé : 999999 (ex. 000001)
-- Niveau_patrimoine_lot_rattachement — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 1.
+- Niveau_patrimoine_lot_rattachement — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 1.
    Description : Niveau de rattachement
    Format / valeurs indicatives : Bâtiment / Lot / Cage d'escalier / Résidence / Stationnement
    Exemples : Lot
-   Valeurs observées (effectif) : Lot (400)
-- Code_famille_equipement — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 10.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Lot (615)
+- Code_famille_equipement — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 10.
    Description : Famille (code)
    Format / valeurs indicatives : VEN / PLO / PCO / FAC / AMX / SEC / MEX / ELE / COV / CHA
    Exemples : VEN ; PLO ; PCO
-   Valeurs observées (effectif) : VEN (40) ; SEC (40) ; PLO (40) ; PCO (40) ; MEX (40) ; FAC (40) ; ELE (40) ; COV (40) ; CHA (40) ; AMX (40)
-- Libelle_famille_equipement — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 10.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : PCO (255) ; AMX (40) ; CHA (40) ; COV (40) ; ELE (40) ; FAC (40) ; MEX (40) ; PLO (40) ; SEC (40) ; VEN (40)
+- Libelle_famille_equipement — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 10.
    Description : Famille (libellé)
    Format / valeurs indicatives : Plomberie - sanitaire / Aménagements extérieurs et stationnement / Electricité / Sécurité et sûreté / Menuiseries extérieures / Parties communes / Ventilation / Couvert / Chauffage et ECS / Façade
    Exemples : Ventilation ; Plomberie - sanitaire ; Parties communes
-   Valeurs observées (effectif) : Ventilation (40) ; Sécurité et sûreté (40) ; Plomberie - sanitaire (40) ; Parties communes (40) ; Menuiseries extérieures (40) ; Façade (40) ; Electricité (40) ; Couvert (40) ; Chauffage et ECS (40) ; Aménagements extérieurs et stationnement (40)
-- Code_type_equipement — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 4.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Parties communes (255) ; Aménagements extérieurs et stationnement (40) ; Chauffage et ECS (40) ; Couvert (40) ; Electricité (40) ; Façade (40) ; Menuiseries extérieures (40) ; Plomberie - sanitaire (40) ; Sécurité et sûreté (40) ; Ventilation (40)
+- Code_type_equipement — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 5.
    Description : Type (code)
    Format / valeurs indicatives : RELE / FACA / COUV / FENE / CHIN / GACO / GACT / SOPC / ECSI / DESE / LVIE / OCCU / SANL / REAS / VOIR / PASO / VMCI / PELO / CHCO / TGAZ / VMCC / SURP / TOTE / IELO / BALC / INTE / IEPC / PLPC / ASCE / MUPC / PBOX / PAUT / CHAS / PLOL / REEP
    Exemples : VMC ; CHA ; POR
-   Valeurs observées (effectif) : VMC (100) ; POR (100) ; ELE (100) ; CHA (100)
-- Libelle_type_equipement — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 4.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : ASC (215) ; CHA (100) ; ELE (100) ; POR (100) ; VMC (100)
+- Libelle_type_equipement — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 5.
    Description : Type (libellé)
    Format / valeurs indicatives : Installation électrique Logements / Interphonie / Contrôle d'accès / VMC individuelle / Fenêtre/porte-fenêtre / Châssis de toit / Panneaux solaires / Installations de plomberie logements / Couverture / Revêtements de plafond / Toiture terrasse / Trappe de désenfumage cage esc. / Porte de box / Murs de façade / Occultations / Installations sanitaires logements / Voirie / Surpresseur / Lignes de vie / ECS individuelle / Chauffage individuel / Revêtements muraux / Revêtements de sol / Pompe de relevage / Tige cuisine gaz / Porte palière logements / Chauffage collectif / Réseaux d'eau potable / Garde-corps / VMC collective / Porte automatique / Installation électrique Parties communes / Réseaux d'assainissement / Ascenseur / Balcon / Garde-corps (protection collective)
    Exemples : VMC ; Chaudiere ; Porte
-   Valeurs observées (effectif) : VMC (100) ; Tableau electrique (100) ; Porte (100) ; Chaudiere (100)
-- Code_nature_equipement — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Ascenseur (215) ; Chaudiere (100) ; Porte (100) ; Tableau electrique (100) ; VMC (100)
+- Code_nature_equipement — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 2.
    Description : Nature (code)
    Format / valeurs indicatives : AUTOR / INERT / CCOGA / GGSTA / CHBAI / VAUTR / GVMCG / SECTI / ITEX / CONVE / LEVAN / INTDI / GACOP / EXSTA / NULL / INTBO / VISIO / ITIN / PACHA / BALLO / PASOP / CCFUE / COULI / HYGRA / DBFLX / RAYON / CCBOI / HYGRB / VNATU / VMCGZ / CCACC / BASCU / BATTA / VROUL / GACOL / GGVEN / GG3CE / BATHR / BASOL / CCUCI / INTDE
    Exemples : IND ; COL
-   Valeurs observées (effectif) : IND (200) ; COL (200)
-- Libelle_nature_equipement — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : COL (415) ; IND (200)
+- Libelle_nature_equipement — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 2.
    Description : Nature (libellé)
    Format / valeurs indicatives : Ballon solaire / Convecteur (élec.) / Générateur gaz sur stato mécanique/naturelle / ITI / Chaufferie au gaz naturel / Chauffage urbain de type CIC / Extracteur stato-mécanique / Inertie (élec.) / Chaufferie bois / Chaufferie fuel / Battante / Garde-corps extérieurs logements / Rayonnant/radiant (élec.) / Générateur sur VMC gaz / Visiophone / ITE / Pompe à chaleur (élec.) / Levante / Basculante / Hygro A / Hygro B / Contrôle d'accès / Coulissante / Ventilation naturelle / Interphone à défilement / Interphone à bouton / Interphone à digicode / Autre type / Garde-corps extérieurs parties communes / Générateur gaz sur conduit 3CEP / Générateur gaz sur ventouse / VMC gaz / Ballon thermodynamique / Chauffe-bain gaz / Double flux / Photovoltaïque / Autoréglable / Volet roulant intégré / Sectionnable / Ballon électrique / NULL
    Exemples : Individuel ; Collectif
-   Valeurs observées (effectif) : Individuel (200) ; Collectif (200)
-- Code_materiaux_equipement — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 5.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Collectif (415) ; Individuel (200)
+- Code_materiaux_equipement — Type SQLite : TEXT. NULL observés : oui (215/615). Valeurs distinctes non NULL : 5.
    Description : Matériau (code)
    Format / valeurs indicatives : BOISS / PVINY / NULL / FBARD / FENDU / ALUMI
    Exemples : BOISS ; PVINY ; FBARD
-   Valeurs observées (effectif) : PVINY (80) ; FENDU (80) ; FBARD (80) ; BOISS (80) ; ALUMI (80)
-- Libelle_materiaux_equipement — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 5.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : ALUMI (80) ; BOISS (80) ; FBARD (80) ; FENDU (80) ; PVINY (80)
+- Libelle_materiaux_equipement — Type SQLite : TEXT. NULL observés : oui (215/615). Valeurs distinctes non NULL : 5.
    Description : Matériau (libellé)
    Format / valeurs indicatives : Bois / PVC / Aluminium / Finition enduit / Finition bardage / NULL
    Exemples : Bois ; PVC ; Aluminium
-   Valeurs observées (effectif) : PVC (80) ; Finition enduit (80) ; Finition bardage (80) ; Bois (80) ; Aluminium (80)
-- Libelle_emplacement — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 4.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Aluminium (80) ; Bois (80) ; Finition bardage (80) ; Finition enduit (80) ; PVC (80)
+- Libelle_emplacement — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 4.
    Description : Emplacement
    Format / valeurs indicatives : NULL
    Exemples : Cuisine ; Toiture ; Cave
-   Valeurs observées (effectif) : Toiture (100) ; Hall (100) ; Cuisine (100) ; Cave (100)
-- Indicateur_pseudo_equipement — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 1.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Hall (315) ; Cave (100) ; Cuisine (100) ; Toiture (100)
+- Indicateur_pseudo_equipement — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 1.
    Description : Pseudo-équipement
    Format / valeurs indicatives : Oui / Non
    Exemples : Non
-   Valeurs observées (effectif) : Non (400)
-- ID_equipement_rattachement — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Non (615)
+- ID_equipement_rattachement — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 615.
    Description : Équipement parent
    Format / valeurs indicatives : NULL
    Exemples : AJ-000001-EQ-0001 ; AC-000002-EQ-0001 ; BSH-000003-EQ-0002
-- Unite_principale — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 1.
+- Unite_principale — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 1.
    Description : Unité de quantité principale
    Format / valeurs indicatives : M² / NB / MI / NULL
    Exemples : NB
-   Valeurs observées (effectif) : NB (400)
-- Quantite_nombre — Type SQLite : INTEGER. NULL observés : non (0/400). Valeurs distinctes non NULL : 4.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : NB (615)
+- Quantite_nombre — Type SQLite : INTEGER. NULL observés : non (0/615). Valeurs distinctes non NULL : 4.
    Description : Quantité (nombre)
    Exemples : 1 ; 2 ; 3
-   Valeurs observées (effectif) : 4 (100) ; 3 (100) ; 2 (100) ; 1 (100)
-- Quantite_surface — Type SQLite : INTEGER. NULL observés : non (0/400). Valeurs distinctes non NULL : 30.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 1 (315) ; 2 (100) ; 3 (100) ; 4 (100)
+- Quantite_surface — Type SQLite : INTEGER. NULL observés : non (0/615). Valeurs distinctes non NULL : 30.
    Description : Quantité (surface)
    Exemples : 10 ; 11 ; 12
    Plage observée : 10 à 39
-- Quantite_lineaire — Type SQLite : INTEGER. NULL observés : non (0/400). Valeurs distinctes non NULL : 10.
+- Quantite_lineaire — Type SQLite : INTEGER. NULL observés : non (0/615). Valeurs distinctes non NULL : 10.
    Description : Quantité (linéaire)
    Exemples : 2 ; 3 ; 4
-   Valeurs observées (effectif) : 11 (40) ; 10 (40) ; 9 (40) ; 8 (40) ; 7 (40) ; 6 (40) ; 5 (40) ; 4 (40) ; 3 (40) ; 2 (40)
-- Indicateur_activite — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 1.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 2 (255) ; 3 (40) ; 4 (40) ; 5 (40) ; 6 (40) ; 7 (40) ; 8 (40) ; 9 (40) ; 10 (40) ; 11 (40)
+- Indicateur_activite — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 1.
    Description : Équipement actif
    Format / valeurs indicatives : Oui / Non
    Exemples : Oui
-   Valeurs observées (effectif) : Oui (400)
-- Date_installation — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 10.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Oui (615)
+- Date_installation — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 11.
    Description : Installation
    Format / valeurs indicatives : AAAA-MM-JJ
    Exemples : 2015-01-01 ; 2016-01-01 ; 2017-01-01
-   Valeurs observées (effectif) : 2024-01-01 (40) ; 2023-01-01 (40) ; 2022-01-01 (40) ; 2021-01-01 (40) ; 2020-01-01 (40) ; 2019-01-01 (40) ; 2018-01-01 (40) ; 2017-01-01 (40) ; 2016-01-01 (40) ; 2015-01-01 (40)
-- Date_mise_en_service — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 10.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 2010-01-01 (215) ; 2015-01-01 (40) ; 2016-01-01 (40) ; 2017-01-01 (40) ; 2018-01-01 (40) ; 2019-01-01 (40) ; 2020-01-01 (40) ; 2021-01-01 (40) ; 2022-01-01 (40) ; 2023-01-01 (40)
+- Date_mise_en_service — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 11.
    Description : Mise en service
    Format / valeurs indicatives : AAAA-MM-JJ
    Exemples : 2015-02-01 ; 2016-02-01 ; 2017-02-01
-   Valeurs observées (effectif) : 2024-02-01 (40) ; 2023-02-01 (40) ; 2022-02-01 (40) ; 2021-02-01 (40) ; 2020-02-01 (40) ; 2019-02-01 (40) ; 2018-02-01 (40) ; 2017-02-01 (40) ; 2016-02-01 (40) ; 2015-02-01 (40)
-- Date_fin_de_service — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 1.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 2010-02-01 (215) ; 2015-02-01 (40) ; 2016-02-01 (40) ; 2017-02-01 (40) ; 2018-02-01 (40) ; 2019-02-01 (40) ; 2020-02-01 (40) ; 2021-02-01 (40) ; 2022-02-01 (40) ; 2023-02-01 (40)
+- Date_fin_de_service — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 2.
    Description : Fin de service
    Format / valeurs indicatives : AAAA-MM-JJ
    Exemples : 2030-12-31
-   Valeurs observées (effectif) : 2030-12-31 (400)
-- Marque — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 4.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 2030-12-31 (400) ; 2040-12-31 (215)
+- Marque — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 5.
    Description : Marque
    Format / valeurs indicatives : NULL
    Exemples : Atlantic ; Legrand ; Schneider
-   Valeurs observées (effectif) : Schneider (100) ; Legrand (100) ; Daikin (100) ; Atlantic (100)
-- Modele — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 100.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Otis (215) ; Atlantic (100) ; Daikin (100) ; Legrand (100) ; Schneider (100)
+- Modele — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 101.
    Description : Modèle
    Format / valeurs indicatives : NULL
    Exemples : MOD-000 ; MOD-001 ; MOD-002
-- Puissance — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 20.
+- Puissance — Type SQLite : TEXT. NULL observés : oui (215/615). Valeurs distinctes non NULL : 20.
    Description : Puissance
    Format / valeurs indicatives : NULL
    Exemples : 2 kW ; 3 kW ; 4 kW
-- Capacite — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+- Capacite — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 401.
    Description : Capacité
    Format / valeurs indicatives : NULL
    Exemples : 100 L ; 101 L ; 102 L
-- Mode_fonctionnement — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 1.
+- Mode_fonctionnement — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 1.
    Description : Mode de fonctionnement
    Format / valeurs indicatives : NULL
    Exemples : Automatique
-   Valeurs observées (effectif) : Automatique (400)
-- Numero_serie_constructeur — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Automatique (615)
+- Numero_serie_constructeur — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 615.
    Description : N° de série constructeur
    Format / valeurs indicatives : NULL
    Exemples : SN00000001 ; SN00000002 ; SN00000003
    Format observé : AA99999999 (ex. SN00000001)
-- Indicateur_iot — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 2.
+- Indicateur_iot — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 2.
    Description : Équipement connecté
    Format / valeurs indicatives : Oui / Non
    Exemples : Oui ; Non
-   Valeurs observées (effectif) : Non (300) ; Oui (100)
-- Numero_serie_boitier_iot — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 101.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Non (515) ; Oui (100)
+- Numero_serie_boitier_iot — Type SQLite : TEXT. NULL observés : oui (215/615). Valeurs distinctes non NULL : 101.
    Description : N° de série du boîtier IoT
    Exemples : IOT00000001 ; N/A ; IOT00000005
-- Date_actualisation — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+- Date_actualisation — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 400.
    Description : Mise à jour
    Exemples : 2025-01-01 12:00:00.000 ; 2025-01-02 12:00:00.000 ; 2025-01-03 12:00:00.000
    Format observé : AAAA-MM-JJ hh:mm:ss.fff
+- Date_debut_observation — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 2.
+   Description : Premier jour de couverture du journal de pannes ; vérifier Origine_observation.
+- Date_fin_observation — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 1.
+   Description : Dernier jour de couverture complète du journal. Aucun jour ultérieur ne doit être considéré comme observé.
+- Origine_observation — Type SQLite : TEXT. NULL observés : non (0/615). Valeurs distinctes non NULL : 1.
+   Description : Origine de la couverture du suivi. Simulation predictions v1 : suivi complet généré artificiellement pour la démonstration.
 
 ## Geographie
 Nombre de lignes : 100
@@ -2007,97 +2017,103 @@ Nombre de lignes : 100
    Format observé : AAAA-MM-JJ hh:mm:ss.fff
 
 ## Intervention
-Nombre de lignes : 400
-- ID_intervention — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+Nombre de lignes : 1271
+- ID_intervention — Type SQLite : TEXT. NULL observés : non (0/1271). Valeurs distinctes non NULL : 1271.
    Description : Identifiant
    Format / valeurs indicatives : Code_societe-Numero_intervention
    Exemples : AJ-011065-INT-0001 ; AC-011066-INT-0002 ; BSH-011067-INT-0003
-- ID_commande — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 300.
+- ID_commande — Type SQLite : TEXT. NULL observés : non (0/1271). Valeurs distinctes non NULL : 1171.
    Description : Commande
    Format / valeurs indicatives : AC-011065
    Exemples : AJ-011065 ; AC-011066 ; BSH-011067
-- ID_lot — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+- ID_lot — Type SQLite : TEXT. NULL observés : non (0/1271). Valeurs distinctes non NULL : 400.
    Description : Lot
    Format / valeurs indicatives : AC-376745
    Exemples : AJ-000001 ; AC-000002 ; BSH-000003
-- Numero_intervention — Type SQLite : INTEGER. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+- Numero_intervention — Type SQLite : INTEGER. NULL observés : oui (871/1271). Valeurs distinctes non NULL : 400.
    Description : Numéro de l'intervention
    Exemples : 1 ; 2 ; 3
    Plage observée : 1 à 400
-- Code_lot_intervention — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+- Code_lot_intervention — Type SQLite : TEXT. NULL observés : non (0/1271). Valeurs distinctes non NULL : 400.
    Description : Code lot de l'intervention
    Format / valeurs indicatives : 2 ou 3 lettres et chiffres
    Exemples : 000001 ; 000002 ; 000003
    Format observé : 999999 (ex. 000001)
-- Code_intervention — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 4.
+- Code_intervention — Type SQLite : TEXT. NULL observés : non (0/1271). Valeurs distinctes non NULL : 6.
    Description : Code de l'intervention
    Format / valeurs indicatives : Lettres majuscules et chiffres
    Exemples : ASC ; VMC ; PLB
-   Valeurs observées (effectif) : VMC (100) ; PLB (100) ; ELE (100) ; ASC (100)
-- Libelle_intervention — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 4.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : ASC (634) ; VMC (182) ; ELE (165) ; CHF (113) ; PLB (100) ; MEN (77)
+- Libelle_intervention — Type SQLite : TEXT. NULL observés : non (0/1271). Valeurs distinctes non NULL : 9.
    Description : Libellé
    Format / valeurs indicatives : WC 2 couches, Plomberie
    Exemples : Ascenseur ; Ventilatio ; Plomberie
-   Valeurs observées (effectif) : Ventilatio (100) ; Plomberie (100) ; Electricit (100) ; Ascenseur (100)
-- Date_realisation_intervention — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Panne Ascenseur simulée (534) ; Panne Chaudiere simulée (113) ; Ascenseur (100) ; Electricit (100) ; Plomberie (100) ; Ventilatio (100) ; Panne VMC simulée (82) ; Panne Porte simulée (77) ; Panne Tableau electrique simulée (65)
+- Date_realisation_intervention — Type SQLite : TEXT. NULL observés : non (0/1271). Valeurs distinctes non NULL : 786.
    Description : Réalisation
    Format / valeurs indicatives : AAAA-MM-JJ
    Exemples : 2025-01-01 ; 2025-01-02 ; 2025-01-03
    Format observé : AAAA-MM-JJ
-- Date_enregistrement_commande — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 300.
+- Date_enregistrement_commande — Type SQLite : TEXT. NULL observés : non (0/1271). Valeurs distinctes non NULL : 733.
    Description : Enregistrement de la commande
    Format / valeurs indicatives : AAAA-MM-JJ
    Exemples : 2025-01-01 ; 2025-01-02 ; 2025-01-03
    Format observé : AAAA-MM-JJ
-- Quantite — Type SQLite : INTEGER. NULL observés : non (0/400). Valeurs distinctes non NULL : 5.
+- Quantite — Type SQLite : INTEGER. NULL observés : non (0/1271). Valeurs distinctes non NULL : 5.
    Description : Quantité
    Exemples : 1 ; 2 ; 3
-   Valeurs observées (effectif) : 5 (80) ; 4 (80) ; 3 (80) ; 2 (80) ; 1 (80)
-- Unite — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 3.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 1 (951) ; 2 (80) ; 3 (80) ; 4 (80) ; 5 (80)
+- Unite — Type SQLite : TEXT. NULL observés : non (0/1271). Valeurs distinctes non NULL : 4.
    Description : Unité
    Format / valeurs indicatives : M3 / LG / M / FFT / H / ST / M2 / F / CAL / U / RLX / ML / % / E
    Exemples : U ; H ; M2
-   Valeurs observées (effectif) : U (134) ; M2 (133) ; H (133)
-- Prix_unitaire_HT — Type SQLite : INTEGER. NULL observés : non (0/400). Valeurs distinctes non NULL : 100.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : unité (871) ; U (134) ; H (133) ; M2 (133)
+- Prix_unitaire_HT — Type SQLite : INTEGER. NULL observés : non (0/1271). Valeurs distinctes non NULL : 968.
    Description : Prix unitaire HT
    Exemples : 50 ; 51 ; 52
    Plage observée : 50 à 149
-- Montant_total_HT — Type SQLite : INTEGER. NULL observés : non (0/400). Valeurs distinctes non NULL : 95.
+- Montant_total_HT — Type SQLite : INTEGER. NULL observés : non (0/1271). Valeurs distinctes non NULL : 963.
    Description : Montant HT
    Exemples : 50 ; 102 ; 156
    Plage observée : 50 à 745
-- Prix_unitaire_TVA — Type SQLite : REAL. NULL observés : non (0/400). Valeurs distinctes non NULL : 100.
+- Prix_unitaire_TVA — Type SQLite : REAL. NULL observés : non (0/1271). Valeurs distinctes non NULL : 101.
    Description : Prix unitaire de TVA
    Exemples : 10.0 ; 10.2 ; 10.4
    Plage observée : 10.0 à 29.8
-- Montant_total_TTC — Type SQLite : REAL. NULL observés : non (0/400). Valeurs distinctes non NULL : 95.
+- Montant_total_TTC — Type SQLite : REAL. NULL observés : non (0/1271). Valeurs distinctes non NULL : 963.
    Description : Montant TTC
    Exemples : 60.0 ; 122.4 ; 187.2
    Plage observée : 60.0 à 894.0
-- Code_schema_comptable — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 20.
+- Code_schema_comptable — Type SQLite : TEXT. NULL observés : oui (871/1271). Valeurs distinctes non NULL : 20.
    Description : Schéma comptable
    Format / valeurs indicatives : 2 ou 3 lettres et chiffres
    Exemples : SC00 ; SC01 ; SC02
    Format observé : AA99 (ex. SC00)
-- Livrable_attendu — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 6.
+- Livrable_attendu — Type SQLite : TEXT. NULL observés : non (0/1271). Valeurs distinctes non NULL : 7.
    Description : Livrable attendu
    Format / valeurs indicatives : EIIE / DTA / DAPP / DPE / EIIG / RAAT ST
    Exemples : EIIE ; DTA ; DAPP
-   Valeurs observées (effectif) : EIIE (67) ; DTA (67) ; DPE (67) ; DAPP (67) ; RAAT ST (66) ; EIIG (66)
-- Date_realisation_livrable — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Compte rendu simulé (871) ; DAPP (67) ; DPE (67) ; DTA (67) ; EIIE (67) ; EIIG (66) ; RAAT ST (66)
+- Date_realisation_livrable — Type SQLite : TEXT. NULL observés : oui (2/1271). Valeurs distinctes non NULL : 778.
    Description : Réalisation du livrable
    Format / valeurs indicatives : AAAA-MM-JJ
    Exemples : 2025-02-01 ; 2025-02-02 ; 2025-02-03
    Format observé : AAAA-MM-JJ
-- Indicateur_livrable_valide — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 2.
+- Indicateur_livrable_valide — Type SQLite : TEXT. NULL observés : non (0/1271). Valeurs distinctes non NULL : 2.
    Description : Livrable validé
    Format / valeurs indicatives : Oui / Non
    Exemples : Non ; Oui
-   Valeurs observées (effectif) : Oui (300) ; Non (100)
-- Date_actualisation — Type SQLite : TEXT. NULL observés : non (0/400). Valeurs distinctes non NULL : 400.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Oui (1169) ; Non (102)
+- Date_actualisation — Type SQLite : TEXT. NULL observés : non (0/1271). Valeurs distinctes non NULL : 778.
    Description : Mise à jour
    Exemples : 2025-01-01 12:00:00.000 ; 2025-01-02 12:00:00.000 ; 2025-01-03 12:00:00.000
    Format observé : AAAA-MM-JJ hh:mm:ss.fff
+- ID_equipement — Type SQLite : TEXT. NULL observés : oui (400/1271). Valeurs distinctes non NULL : 393.
+   Description : Équipement concerné par l’intervention. Jointure vers Equipement.ID_equipement. NULL pour les anciennes interventions non rattachées.
+- Indicateur_panne — Type SQLite : TEXT. NULL observés : oui (400/1271). Valeurs distinctes non NULL : 1.
+   Description : Oui pour une panne datée ; NULL si la nature de l’ancienne intervention est inconnue. Une intervention générique ne prouve pas une panne.
+- Origine_donnees — Type SQLite : TEXT. NULL observés : oui (400/1271). Valeurs distinctes non NULL : 1.
+   Description : Origine explicite des lignes ajoutées. Simulation predictions v1 : données synthétiques, jamais des observations réelles.
 
 ## Lot
 Nombre de lignes : 400
@@ -3187,275 +3203,289 @@ Nombre de lignes : 400
 
 ## Releve_compte_client_historique
 ### Identification
-Nombre de lignes : 709
-- ID_client — Type SQLite : TEXT. NULL observés : non (0/709). Valeurs distinctes non NULL : 320.
+Nombre de lignes : 6720
+- ID_client — Type SQLite : TEXT. NULL observés : non (0/6720). Valeurs distinctes non NULL : 320.
    Confidentialité : RGPD
    Description : Client
    Format / valeurs indicatives : AC-003301
    Exemples : AJ-003301 ; AC-003302 ; BSH-003303
-- ID_client_annee_mois — Type SQLite : TEXT. NULL observés : non (0/709). Valeurs distinctes non NULL : 709.
+- ID_client_annee_mois — Type SQLite : TEXT. NULL observés : non (0/6720). Valeurs distinctes non NULL : 6720.
    Confidentialité : RGPD
    Description : Client et mois
    Format / valeurs indicatives : AC-003193-2020-08
    Exemples : AJ-003301-2025-01 ; AC-003302-2025-01 ; BSH-003303-2025-01
-- Annee_mois — Type SQLite : TEXT. NULL observés : non (0/709). Valeurs distinctes non NULL : 3.
+- Annee_mois — Type SQLite : TEXT. NULL observés : non (0/6720). Valeurs distinctes non NULL : 21.
    Description : Mois
    Format / valeurs indicatives : AAAA-MM
    Exemples : 2025-01-01 ; 2025-02-01 ; 2025-03-01
-   Valeurs observées (effectif) : 2025-02-01 (320) ; 2025-01-01 (320) ; 2025-03-01 (69)
-- Annee_mois_ordre — Type SQLite : TEXT. NULL observés : non (0/709). Valeurs distinctes non NULL : 365.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 2025-01-01 (320) ; 2025-02-01 (320) ; 2025-03-01 (320) ; 2025-04-01 (320) ; 2025-05-01 (320) ; 2025-06-01 (320) ; 2025-07-01 (320) ; 2025-08-01 (320) ; 2025-09-01 (320) ; 2025-10-01 (320)
+- Annee_mois_ordre — Type SQLite : TEXT. NULL observés : non (0/6720). Valeurs distinctes non NULL : 374.
    Description : Mois, format de tri
    Format / valeurs indicatives : AAAA-MM (le PDF ne précise pas le format AAAAMM)
    Exemples : 2025-01-01 ; 2025-01-02 ; 2025-01-03
    Format observé : AAAA-MM-JJ
-- Code_societe — Type SQLite : TEXT. NULL observés : non (0/709). Valeurs distinctes non NULL : 4.
+- Code_societe — Type SQLite : TEXT. NULL observés : non (0/6720). Valeurs distinctes non NULL : 4.
    Description : Société
    Format / valeurs indicatives : AJ / AC / BSH / MF1
    Exemples : AJ ; AC ; BSH
-   Valeurs observées (effectif) : AJ (178) ; MF1 (177) ; BSH (177) ; AC (177)
-- Code_client — Type SQLite : TEXT. NULL observés : non (0/709). Valeurs distinctes non NULL : 320.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : AC (1680) ; AJ (1680) ; BSH (1680) ; MF1 (1680)
+- Code_client — Type SQLite : TEXT. NULL observés : non (0/6720). Valeurs distinctes non NULL : 320.
    Confidentialité : RGPD
    Description : Code client
    Format / valeurs indicatives : 6 chiffres
    Exemples : 003301 ; 003302 ; 003303
    Format observé : 999999 (ex. 003301)
-- Montant_solde_client — Type SQLite : REAL. NULL observés : non (0/709). Valeurs distinctes non NULL : 30.
+- Montant_solde_client — Type SQLite : REAL. NULL observés : non (0/6720). Valeurs distinctes non NULL : 1175.
    Description : Solde du compte
    Exemples : -355.0 ; -319.5 ; -284.0
    Plage observée : -355.0 à 674.5
-- Date_ecriture_retenue_solde_client — Type SQLite : TEXT. NULL observés : non (0/709). Valeurs distinctes non NULL : 3.
+- Date_ecriture_retenue_solde_client — Type SQLite : TEXT. NULL observés : non (0/6720). Valeurs distinctes non NULL : 22.
    Description : Date de l'écriture retenue pour le solde
    Format / valeurs indicatives : AAAA-MM-JJ
    Exemples : 2025-01-16 ; 2025-02-16 ; 2025-03-16
-   Valeurs observées (effectif) : 2025-02-16 (320) ; 2025-01-16 (320) ; 2025-03-16 (69)
-- Numero_ecriture_retenue_solde_client — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 709.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 2025-01-16 (320) ; 2025-02-16 (320) ; 2025-04-30 (320) ; 2025-05-31 (320) ; 2025-06-30 (320) ; 2025-07-31 (320) ; 2025-08-31 (320) ; 2025-09-30 (320) ; 2025-10-31 (320) ; 2025-11-30 (320)
+- Numero_ecriture_retenue_solde_client — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 6720.
    Description : Numéro de l'écriture retenue
    Format / valeurs indicatives : 1 à 10 000
    Exemples : 1 ; 2 ; 3
    Plage observée : 1 à 709
-- Montant_impaye_potentiel — Type SQLite : REAL. NULL observés : non (0/709). Valeurs distinctes non NULL : 20.
+- Montant_impaye_potentiel — Type SQLite : REAL. NULL observés : non (0/6720). Valeurs distinctes non NULL : 1165.
    Description : Impayé potentiel
    Exemples : 0.0 ; 35.5 ; 71.0
    Plage observée : 0.0 à 674.5
-- Classe_montant_impaye_potentiel — Type SQLite : TEXT. NULL observés : non (0/709). Valeurs distinctes non NULL : 5.
+- Classe_montant_impaye_potentiel — Type SQLite : TEXT. NULL observés : non (0/6720). Valeurs distinctes non NULL : 6.
    Description : Tranche
    Format / valeurs indicatives : Pas de dette / 0-10€ / 10-150€ / 150-600€ / 600-1500€ / 1500-3000€ / 3000-4500€ / > 4500€
    Exemples : Pas de dette ; 0-10€ ; 10-150€
-   Valeurs observées (effectif) : Pas de dette (142) ; 150-600€ (142) ; 10-150€ (142) ; 0-10€ (142) ; 600-1500€ (141)
-- Montant_sommes_attente — Type SQLite : REAL. NULL observés : non (0/709). Valeurs distinctes non NULL : 100.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Dette simulée (3560) ; Pas de dette (2593) ; 0-10€ (142) ; 10-150€ (142) ; 150-600€ (142) ; 600-1500€ (141)
+- Montant_sommes_attente — Type SQLite : REAL. NULL observés : non (0/6720). Valeurs distinctes non NULL : 100.
    Description : Sommes en attente
    Exemples : 0.0 ; 2.5 ; 5.0
    Plage observée : 0.0 à 247.5
-- Montant_impaye_retardataire — Type SQLite : REAL. NULL observés : non (0/709). Valeurs distinctes non NULL : 20.
+- Montant_impaye_retardataire — Type SQLite : REAL. NULL observés : non (0/6720). Valeurs distinctes non NULL : 1168.
    Description : Impayé retardataire
    Exemples : 0.0 ; 17.75 ; 35.5
    Plage observée : 0.0 à 337.25
-- Montant_impaye — Type SQLite : REAL. NULL observés : non (0/709). Valeurs distinctes non NULL : 20.
+- Montant_impaye — Type SQLite : REAL. NULL observés : non (0/6720). Valeurs distinctes non NULL : 1165.
    Description : Impayé
    Exemples : 0.0 ; 35.5 ; 71.0
    Plage observée : 0.0 à 674.5
-- Classe_montant_impaye — Type SQLite : TEXT. NULL observés : non (0/709). Valeurs distinctes non NULL : 4.
+- Classe_montant_impaye — Type SQLite : TEXT. NULL observés : non (0/6720). Valeurs distinctes non NULL : 6.
    Description : Tranche d'impayé
    Format / valeurs indicatives : Mêmes tranches que ci-dessus
    Exemples : Pas de dette ; 0-10€ ; 10-150€
-   Valeurs observées (effectif) : Pas de dette (178) ; 150-600€ (177) ; 10-150€ (177) ; 0-10€ (177)
-- Indicateur_anciennete_impaye — Type SQLite : TEXT. NULL observés : non (0/709). Valeurs distinctes non NULL : 3.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Moins de 500 euros (3171) ; Pas de dette (2629) ; 500 euros et plus (389) ; 0-10€ (177) ; 10-150€ (177) ; 150-600€ (177)
+- Indicateur_anciennete_impaye — Type SQLite : TEXT. NULL observés : non (0/6720). Valeurs distinctes non NULL : 5.
    Description : Ancienneté de l'impayé
    Format / valeurs indicatives : Pas de dette / Nouveau / Ancien
    Exemples : Pas de dette ; Nouveau ; Ancien
-   Valeurs observées (effectif) : Pas de dette (237) ; Nouveau (236) ; Ancien (236)
-- Indicateur_evolution_impaye — Type SQLite : TEXT. NULL observés : non (0/709). Valeurs distinctes non NULL : 3.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Oui (3280) ; Non (2731) ; Pas de dette (237) ; Ancien (236) ; Nouveau (236)
+- Indicateur_evolution_impaye — Type SQLite : TEXT. NULL observés : non (0/6720). Valeurs distinctes non NULL : 3.
    Description : Tendance
    Format / valeurs indicatives : Baisse / Stable / Hausse
    Exemples : Baisse ; Stable ; Hausse
-   Valeurs observées (effectif) : Baisse (237) ; Stable (236) ; Hausse (236)
-- Evolution_montant_impaye — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 11.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Baisse (3253) ; Stable (2535) ; Hausse (932)
+- Evolution_montant_impaye — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 538.
    Description : Variation de l'impayé
    Exemples : -50 ; -40 ; -30
-   Valeurs observées (effectif) : -10 (65) ; -20 (65) ; -30 (65) ; -40 (65) ; -50 (65) ; 50 (64) ; 40 (64) ; 30 (64) ; 20 (64) ; 10 (64) ; 0 (64)
-- Montant_loyer — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 200.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (2363) ; -10 (111) ; -40 (99) ; -20 (99) ; -30 (87) ; -50 (86) ; 10 (76) ; -2 (71) ; 20 (69) ; 30 (66)
+- Montant_loyer — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 210.
    Description : Loyer
    Exemples : 450 ; 451 ; 452
    Plage observée : 450 à 649
-- Montant_loyer_residuel_hors_rappel_APL_RLS — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 150.
+- Montant_loyer_residuel_hors_rappel_APL_RLS — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 322.
    Description : Loyer résiduel hors rappel APL/RLS
    Exemples : 300 ; 301 ; 302
    Plage observée : 300 à 449
-- Indicateur_evolution_loyer_residuel_hors_rappel_APL_RLS — Type SQLite : TEXT. NULL observés : non (0/709). Valeurs distinctes non NULL : 3.
+- Indicateur_evolution_loyer_residuel_hors_rappel_APL_RLS — Type SQLite : TEXT. NULL observés : oui (6011/6720). Valeurs distinctes non NULL : 3.
    Description : Tendance
    Format / valeurs indicatives : Baisse / Stable / Hausse
    Exemples : Baisse ; Stable ; Hausse
-   Valeurs observées (effectif) : Baisse (237) ; Stable (236) ; Hausse (236)
-- Evolution_montant_loyer_residuel_hors_rappel_APL_RLS — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 9.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Baisse (237) ; Hausse (236) ; Stable (236)
+- Evolution_montant_loyer_residuel_hors_rappel_APL_RLS — Type SQLite : INTEGER. NULL observés : oui (6011/6720). Valeurs distinctes non NULL : 9.
    Description : Variation
    Exemples : -20 ; -15 ; -10
-   Valeurs observées (effectif) : 10 (79) ; 5 (79) ; 0 (79) ; -5 (79) ; -10 (79) ; -15 (79) ; -20 (79) ; 20 (78) ; 15 (78)
-- Montant_loyer_residuel_avec_rappel_APL_RLS — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 150.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : -20 (79) ; -15 (79) ; -10 (79) ; -5 (79) ; 0 (79) ; 5 (79) ; 10 (79) ; 15 (78) ; 20 (78)
+- Montant_loyer_residuel_avec_rappel_APL_RLS — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 332.
    Description : Loyer résiduel avec rappel APL/RLS
    Exemples : 280 ; 281 ; 282
    Plage observée : 280 à 429
-- Montant_APL — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 51.
+- Montant_APL — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 51.
    Description : APL
    Exemples : 120 ; 0 ; 123
    Plage observée : 0 à 169
-- Indicateur_APL — Type SQLite : TEXT. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+- Indicateur_APL — Type SQLite : TEXT. NULL observés : non (0/6720). Valeurs distinctes non NULL : 2.
    Description : Bénéficiaire APL
    Format / valeurs indicatives : Oui / Non
    Exemples : Oui ; Non
-   Valeurs observées (effectif) : Non (472) ; Oui (237)
-- Montant_rappel_APL — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Non (5573) ; Oui (1147)
+- Montant_rappel_APL — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 2.
    Description : Rappel APL
    Exemples : 50 ; 0
-   Valeurs observées (effectif) : 0 (531) ; 50 (178)
-- Montant_RLS — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (6542) ; 50 (178)
+- Montant_RLS — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 2.
    Description : Réduction de loyer de solidarité
    Exemples : 20 ; 0
-   Valeurs observées (effectif) : 20 (355) ; 0 (354)
-- Montant_rappel_RLS — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (5016) ; 20 (1704)
+- Montant_rappel_RLS — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 2.
    Description : Rappel RLS
    Exemples : 15 ; 0
-   Valeurs observées (effectif) : 0 (567) ; 15 (142)
-- Montant_allocation_logement — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (6578) ; 15 (142)
+- Montant_allocation_logement — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 2.
    Description : Allocation logement
    Exemples : 80 ; 0
-   Valeurs observées (effectif) : 0 (531) ; 80 (178)
-- Montant_charges — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 40.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (6542) ; 80 (178)
+- Montant_charges — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 66.
    Description : Charges
    Exemples : 80 ; 81 ; 82
    Plage observée : 80 à 119
-- Montant_charges_facturation_client — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 40.
+- Montant_charges_facturation_client — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 66.
    Description : Charges (facturation client)
    Exemples : 80 ; 81 ; 82
    Plage observée : 80 à 119
-- Montant_charges_facturation_immediate — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 30.
+- Montant_charges_facturation_immediate — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 31.
    Description : Charges (facturation immédiate)
    Exemples : 70 ; 71 ; 72
    Plage observée : 70 à 99
-- Montant_SLS — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+- Montant_SLS — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 2.
    Description : Supplément de loyer de solidarité
    Exemples : 35 ; 0
-   Valeurs observées (effectif) : 0 (607) ; 35 (102)
-- Montant_penalite_SLS — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (6618) ; 35 (102)
+- Montant_penalite_SLS — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 2.
    Description : Pénalité SLS
    Exemples : 5 ; 0
-   Valeurs observées (effectif) : 0 (607) ; 5 (102)
-- Indicateur_penalite_SLS — Type SQLite : TEXT. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (6618) ; 5 (102)
+- Indicateur_penalite_SLS — Type SQLite : TEXT. NULL observés : non (0/6720). Valeurs distinctes non NULL : 2.
    Description : Pénalité SLS appliquée
    Format / valeurs indicatives : Oui / Non
    Exemples : Oui ; Non
-   Valeurs observées (effectif) : Non (607) ; Oui (102)
-- Montant_penalite_assurance — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Non (6618) ; Oui (102)
+- Montant_penalite_assurance — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 2.
    Description : Pénalité d'assurance
    Exemples : 8 ; 0
-   Valeurs observées (effectif) : 0 (590) ; 8 (119)
-- Indicateur_mandat_prelevement_quittancement — Type SQLite : TEXT. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (6601) ; 8 (119)
+- Indicateur_mandat_prelevement_quittancement — Type SQLite : TEXT. NULL observés : non (0/6720). Valeurs distinctes non NULL : 2.
    Description : Mandat de prélèvement (quittancement)
    Format / valeurs indicatives : Oui / Non
    Exemples : Oui ; Non
-   Valeurs observées (effectif) : Oui (355) ; Non (354)
-- Jour_mandat_prelevement_quittancement — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 25.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Oui (6366) ; Non (354)
+- Jour_mandat_prelevement_quittancement — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 25.
    Description : Jour de prélèvement (quittancement)
    Format / valeurs indicatives : type non précisé dans le PDF
    Exemples : 5 ; 6 ; 7
    Plage observée : 5 à 29
-- Indicateur_mandat_prelevement_accord_reglement — Type SQLite : TEXT. NULL observés : non (0/709). Valeurs distinctes non NULL : 1.
+- Indicateur_mandat_prelevement_accord_reglement — Type SQLite : TEXT. NULL observés : oui (6011/6720). Valeurs distinctes non NULL : 1.
    Description : Mandat de prélèvement (accord de règlement)
    Format / valeurs indicatives : Oui / Non
    Exemples : Non
-   Valeurs observées (effectif) : Non (709)
-- Jour_mandat_prelevement_accord_reglement — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 20.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Non (709)
+- Jour_mandat_prelevement_accord_reglement — Type SQLite : INTEGER. NULL observés : oui (6011/6720). Valeurs distinctes non NULL : 20.
    Description : Jour de prélèvement (accord de règlement)
    Format / valeurs indicatives : 1 à 30
    Exemples : 10 ; 11 ; 12
    Plage observée : 10 à 29
-- Libelle_type_paiement_majoritaire — Type SQLite : TEXT. NULL observés : non (0/709). Valeurs distinctes non NULL : 8.
+- Libelle_type_paiement_majoritaire — Type SQLite : TEXT. NULL observés : non (0/6720). Valeurs distinctes non NULL : 8.
    Description : Moyen de paiement majoritaire
    Format / valeurs indicatives : Carte / TPE / Virement / Chèque / Prélèvement / Ecriture manuelle / Pas de paiement / Espèces
    Exemples : Carte ; TPE ; Virement
-   Valeurs observées (effectif) : Virement (89) ; TPE (89) ; Prélèvement (89) ; Chèque (89) ; Carte (89) ; Pas de paiement (88) ; Espèces (88) ; Ecriture manuelle (88)
-- Montant_paiement_prelevement — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 100.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Prélèvement (6100) ; Carte (89) ; Chèque (89) ; TPE (89) ; Virement (89) ; Ecriture manuelle (88) ; Espèces (88) ; Pas de paiement (88)
+- Montant_paiement_prelevement — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 817.
    Description : Paiements par prélèvement
    Exemples : 300 ; 301 ; 302
    Plage observée : 300 à 399
-- Montant_rejet_prelevement — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+- Montant_rejet_prelevement — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 168.
    Description : Rejets de prélèvement
    Exemples : 30 ; 0
-   Valeurs observées (effectif) : 0 (638) ; 30 (71)
-- Montant_paiement_virement_bancaire — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 70.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (6439) ; 30 (71) ; 174 (4) ; 274 (4) ; 384 (4) ; 106 (3) ; 149 (3) ; 211 (3) ; 373 (3) ; 395 (3)
+- Montant_paiement_virement_bancaire — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 71.
    Description : Paiements par virement
    Exemples : 100 ; 101 ; 102
    Plage observée : 100 à 169
-- Montant_remboursement_virement_bancaire — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+- Montant_remboursement_virement_bancaire — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 2.
    Description : Remboursements par virement
    Exemples : 25 ; 0
-   Valeurs observées (effectif) : 0 (673) ; 25 (36)
-- Montant_paiement_carte_bancaire — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (6684) ; 25 (36)
+- Montant_paiement_carte_bancaire — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 2.
    Description : Paiements par carte
    Exemples : 50 ; 0
-   Valeurs observées (effectif) : 0 (472) ; 50 (237)
-- Montant_paiement_cheque — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (6483) ; 50 (237)
+- Montant_paiement_cheque — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 2.
    Description : Paiements par chèque
    Exemples : 60 ; 0
-   Valeurs observées (effectif) : 0 (531) ; 60 (178)
-- Montant_remboursement_cheque — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (6542) ; 60 (178)
+- Montant_remboursement_cheque — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 2.
    Description : Remboursements par chèque
    Exemples : 10 ; 0
-   Valeurs observées (effectif) : 0 (661) ; 10 (48)
-- Montant_paiement_espece — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (6672) ; 10 (48)
+- Montant_paiement_espece — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 2.
    Description : Paiements en espèces
    Exemples : 20 ; 0
-   Valeurs observées (effectif) : 0 (567) ; 20 (142)
-- Montant_paiement_mandat — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (6578) ; 20 (142)
+- Montant_paiement_mandat — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 2.
    Description : Paiements par mandat
    Exemples : 15 ; 0
-   Valeurs observées (effectif) : 0 (620) ; 15 (89)
-- Montant_paiement_tpe — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (6631) ; 15 (89)
+- Montant_paiement_tpe — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 2.
    Description : Paiements par TPE
    Exemples : 30 ; 0
-   Valeurs observées (effectif) : 0 (590) ; 30 (119)
-- Montant_paiement_ecriture_manuelle — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (6601) ; 30 (119)
+- Montant_paiement_ecriture_manuelle — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 2.
    Description : Paiements par écriture manuelle
    Exemples : 12 ; 0
-   Valeurs observées (effectif) : 0 (630) ; 12 (79)
-- Montant_paiement_moins_remboursement — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 100.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (6641) ; 12 (79)
+- Montant_paiement_moins_remboursement — Type SQLite : INTEGER. NULL observés : non (0/6720). Valeurs distinctes non NULL : 790.
    Description : Paiements nets des remboursements
    Exemples : 450 ; 451 ; 452
    Plage observée : 450 à 549
-- Montant_total_accords_reglements_actifs — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+- Montant_total_accords_reglements_actifs — Type SQLite : INTEGER. NULL observés : oui (6011/6720). Valeurs distinctes non NULL : 2.
    Description : Total des accords actifs
    Exemples : 500 ; 0
-   Valeurs observées (effectif) : 0 (567) ; 500 (142)
-- Indicateur_accords_reglements_actifs — Type SQLite : TEXT. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (567) ; 500 (142)
+- Indicateur_accords_reglements_actifs — Type SQLite : TEXT. NULL observés : oui (6011/6720). Valeurs distinctes non NULL : 2.
    Description : Accord actif
    Format / valeurs indicatives : Oui / Non
    Exemples : Oui ; Non
-   Valeurs observées (effectif) : Non (567) ; Oui (142)
-- Montant_echeances_passees_accords_reglements_actifs — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Non (567) ; Oui (142)
+- Montant_echeances_passees_accords_reglements_actifs — Type SQLite : INTEGER. NULL observés : oui (6011/6720). Valeurs distinctes non NULL : 2.
    Description : Échéances passées
    Exemples : 150 ; 0
-   Valeurs observées (effectif) : 0 (567) ; 150 (142)
-- Montant_echeances_passees_respectees_accords_reglements_actifs — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (567) ; 150 (142)
+- Montant_echeances_passees_respectees_accords_reglements_actifs — Type SQLite : INTEGER. NULL observés : oui (6011/6720). Valeurs distinctes non NULL : 2.
    Description : Échéances passées respectées
    Exemples : 100 ; 0
-   Valeurs observées (effectif) : 0 (567) ; 100 (142)
-- Montant_echeances_passees_non_respectees_accords_reglements_actifs — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (567) ; 100 (142)
+- Montant_echeances_passees_non_respectees_accords_reglements_actifs — Type SQLite : INTEGER. NULL observés : oui (6011/6720). Valeurs distinctes non NULL : 2.
    Description : Échéances passées non respectées
    Exemples : 50 ; 0
-   Valeurs observées (effectif) : 0 (567) ; 50 (142)
-- Montant_echeances_en_cours_accords_reglements_actifs — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (567) ; 50 (142)
+- Montant_echeances_en_cours_accords_reglements_actifs — Type SQLite : INTEGER. NULL observés : oui (6011/6720). Valeurs distinctes non NULL : 2.
    Description : Échéances en cours
    Exemples : 100 ; 0
-   Valeurs observées (effectif) : 0 (567) ; 100 (142)
-- Montant_echeances_a_venir_accords_reglements_actifs — Type SQLite : INTEGER. NULL observés : non (0/709). Valeurs distinctes non NULL : 2.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (567) ; 100 (142)
+- Montant_echeances_a_venir_accords_reglements_actifs — Type SQLite : INTEGER. NULL observés : oui (6011/6720). Valeurs distinctes non NULL : 2.
    Description : Échéances à venir
    Exemples : 250 ; 0
-   Valeurs observées (effectif) : 0 (567) ; 250 (142)
-- Libelle_activite_echeanciers — Type SQLite : TEXT. NULL observés : non (0/709). Valeurs distinctes non NULL : 4.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : 0 (567) ; 250 (142)
+- Libelle_activite_echeanciers — Type SQLite : TEXT. NULL observés : oui (6011/6720). Valeurs distinctes non NULL : 4.
    Description : Activité de l'échéancier
    Format / valeurs indicatives : Début / En cours / Fin / Clos
    Exemples : Début ; En cours ; Fin
-   Valeurs observées (effectif) : Début (178) ; Fin (177) ; En cours (177) ; Clos (177)
-- Date_actualisation — Type SQLite : TEXT. NULL observés : non (0/709). Valeurs distinctes non NULL : 709.
+   Valeurs observées (effectif ; jusqu’à 10 valeurs) : Début (178) ; Clos (177) ; En cours (177) ; Fin (177)
+- Date_actualisation — Type SQLite : TEXT. NULL observés : non (0/6720). Valeurs distinctes non NULL : 728.
    Description : Mise à jour
    Exemples : 2025-01-01 12:00:00.000 ; 2025-01-02 12:00:00.000 ; 2025-01-03 12:00:00.000
    Format observé : AAAA-MM-JJ hh:mm:ss.fff
+- Origine_donnees — Type SQLite : TEXT. NULL observés : oui (709/6720). Valeurs distinctes non NULL : 1.
+   Description : Origine explicite des lignes ajoutées. Simulation predictions v1 : données synthétiques, jamais des observations réelles.
+
+
+## Simulation_dataset
+Nombre de lignes : 1
+- ID_simulation — Type SQLite : TEXT.
+   Description : Métadonnées du générateur reproductible de données fictives.
+- Origine_donnees — Type SQLite : TEXT.
+   Description : Métadonnées du générateur reproductible de données fictives.
+- Parametres — Type SQLite : TEXT.
+   Description : Métadonnées du générateur reproductible de données fictives.
+- Date_generation — Type SQLite : TEXT.
+   Description : Métadonnées du générateur reproductible de données fictives.

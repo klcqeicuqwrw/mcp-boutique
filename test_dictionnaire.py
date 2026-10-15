@@ -11,7 +11,7 @@ def test_dictionnaire_reel_couvre_base_et_marque_donnees_sensibles():
     dico = lire_dictionnaire(DICO)
     with sqlite3.connect((ROOT / "DWH_fictive_10000_lignes.sqlite").resolve().as_uri() + "?mode=ro", uri=True) as c:
         tables = [r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")]
-        assert len(tables) == len(dico) == 28
+        assert len(tables) == len(dico) == 29
         for t in tables:
             assert {r[1].lower() for r in c.execute(f'PRAGMA table_info("{t}")')} == {x["nom"].lower() for x in dico[t.lower()]["colonnes"]}
     assert {"nom_occupant", "prenom_occupant", "mail_occupant", "telephone_occupant"} <= dico["occupant"]["rgpd"]
@@ -45,4 +45,4 @@ def test_mcp_protege_les_colonnes_du_dictionnaire_reel(monkeypatch, tmp_path):
     for col in ("Nom_occupant", "Mail_occupant", "Telephone_occupant"):
         with pytest.raises(PermissionError):
             server._executer(f"SELECT {col} FROM Occupant", "test")
-    assert server._executer("SELECT COUNT(*) AS n FROM Occupant", "test")["rows"] == [{"n": 400}]
+    assert server._executer("SELECT COUNT(*) AS n FROM Occupant", "test")["rows"] == [{"n": 412}]

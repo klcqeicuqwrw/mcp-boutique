@@ -36,7 +36,7 @@ th,td{border:1px solid var(--bd);padding:6px 10px;text-align:left}th{background:
   order: -1 !important;
 }
 </style>
-<link rel="stylesheet" href="/static/theme.css?v=20261014-toutatis-2">
+<link rel="stylesheet" href="/static/theme.css?v=20261015-accueil-1">
 <link rel="icon" type="image/svg+xml" href="/static/toutatis.svg"></head><body>
 
 <div id="side"><div class="brand"><img src="/static/logo.png" alt="Aiguillon Construction"></div>
@@ -45,7 +45,7 @@ th,td{border:1px solid var(--bd);padding:6px 10px;text-align:left}th{background:
 <div id="who"><span id="me" class="chip"></span><a id="adm" class="sb" href="/admin" hidden>Administration</a>
 <button id="pw" class="sb alt">Changer mon mot de passe</button><button id="out" class="sb dark">Se déconnecter</button></div></div>
 <div id="main">
-<nav class="workspace-nav" aria-label="Outils collaborateurs"><span class="app-brand"><img src="/static/toutatis.svg" width="30" height="30" alt=""><span>Toutat'<b>IS</b></span></span><button type="button" id="tasks-open">À traiter</button><button type="button" id="favorites-open">★ Mes recherches</button></nav>
+<nav class="workspace-nav" aria-label="Outils collaborateurs"><span class="app-brand"><img src="/static/toutatis.svg" width="30" height="30" alt=""><span>Toutat'<b>IS</b></span></span><button type="button" id="tasks-open">À traiter</button><button type="button" id="predictions-open">Prévisions</button><button type="button" id="favorites-open">★ Mes recherches</button></nav>
 <div id="thread"></div>
 <div id="bar"><div class="model-switch" role="radiogroup" aria-label="Choix du modèle IA">
 <input type="radio" name="model" id="model-gemini" value="gemini" checked><label for="model-gemini">Gemini</label>
@@ -177,4 +177,4 @@ $('f').onsubmit=async e=>{e.preventDefault();const q=$('q').value.trim();if(!q||
     .catch(x=>{m.attente=false;majTexte(node,'(Réponse texte indisponible : '+x.message+')')})
   }catch(x){bubble('a e',esc(x.message))}
   finally{sending=false;$('send').disabled=false;$('send').innerHTML='Envoyer <span aria-hidden="true">↑</span>';$('q').disabled=false;$('thread').setAttribute('aria-busy','false');$('q').focus()}};
-</script><script src="/static/actions.js?v=20261014-espace-2"></script><script src="/static/espace.js?v=20261014-espace-2"></script><script>start();</script></body></html>
+</script><script src="/static/actions.js?v=20261015-predictions-3"></script><script src="/static/espace.js?v=20261015-predictions-3"></script><script src="/static/predictions.js?v=20261015-predictions-3"></script><script>start();</script></body></html>

@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 import config
 import securite as S
 from boutique.dependencies import csrf, WEB
-from boutique import pages, auth, chat, exports, admin, espace
+from boutique import pages, auth, chat, exports, admin, espace, predictions
 
 
 @asynccontextmanager
@@ -27,7 +27,7 @@ async def private_cache(request, call_next):
 
 
 app.mount("/static", StaticFiles(directory=WEB / "static"), name="static")
-for module in (pages, auth, chat, exports, admin, espace):
+for module in (pages, auth, chat, exports, admin, espace, predictions):
     app.include_router(module.router)
 
 

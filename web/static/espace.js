@@ -8,10 +8,12 @@ function dateMetier(){return new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/P
 function formatDate(v){if(!v)return 'Non renseignée';const d=String(v).slice(0,10).split('-');return d.length===3?d.reverse().join('/'):String(v)}
 function lienSur(v){try{const u=new URL(String(v));return ['http:','https:'].includes(u.protocol)&&!u.username&&!u.password?u.href:null}catch{return null}}
 function lienBouton(titre,url){const a=document.createElement('a');a.className='tool-link';a.textContent=titre+' ↗';a.href=url;a.target='_blank';a.rel='noopener noreferrer';return a}
+function nettoyerCourbes(node){if(node&&typeof Chart!=='undefined')node.querySelectorAll('canvas').forEach(c=>Chart.getChart(c)?.destroy())}
 
 function panneau(titre){
   let d=$('workspace-dialog');
   if(!d){d=document.createElement('dialog');d.id='workspace-dialog';d.setAttribute('aria-labelledby','workspace-title');d.innerHTML='<div class="workspace-header"><div><small>MON ESPACE COLLABORATEUR</small><h2 id="workspace-title"></h2></div><button type="button" id="workspace-close" aria-label="Fermer le panneau">✕</button></div><div id="workspace-body"></div>';document.body.appendChild(d);$('workspace-close').onclick=()=>d.close();d.addEventListener('close',()=>{if(!d.open)panneauVersion++})}
+  nettoyerCourbes($('workspace-body'));
   $('workspace-title').textContent=titre;$('workspace-body').innerHTML='<p role="status">Chargement…</p>';
   if(!d.open)d.showModal();
   return ++panneauVersion;
