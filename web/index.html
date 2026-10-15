@@ -36,7 +36,7 @@ th,td{border:1px solid var(--bd);padding:6px 10px;text-align:left}th{background:
   order: -1 !important;
 }
 </style>
-<link rel="stylesheet" href="/static/theme.css?v=20261015-accueil-1">
+<link rel="stylesheet" href="/static/theme.css?v=20261015-erreurs-1">
 <link rel="icon" type="image/svg+xml" href="/static/toutatis.svg"></head><body>
 
 <div id="side"><div class="brand"><img src="/static/logo.png" alt="Aiguillon Construction"></div>
@@ -60,19 +60,22 @@ let convs=[],cur=null,sending=false;
 try{if(localStorage.getItem('fournisseur-ia')==='openai')$('model-openai').checked=true}catch{}
 document.querySelectorAll('input[name="model"]').forEach(input=>input.onchange=()=>{try{localStorage.setItem('fournisseur-ia',input.value)}catch{}});
 async function api(path,method='GET',body){
-  const r=await fetch(path,{method,headers:{'Content-Type':'application/json','X-Requested-With':'fetch'},body:body&&JSON.stringify(body)});
+  let r;
+  try{r=await fetch(path,{method,headers:{'Content-Type':'application/json','X-Requested-With':'fetch'},body:body&&JSON.stringify(body)})}
+  catch{throw new Error('Connexion au serveur de l’application impossible. Vérifiez votre connexion réseau et que le serveur est démarré.')}
   const d=await r.json().catch(()=>({}));
   if(r.status===401){location.href='/'}
-  if(!r.ok)throw new Error(typeof d.detail==='string'?d.detail:'Erreur');
+  if(!r.ok){const messages={401:'Votre session a expiré. Reconnectez-vous.',403:'Votre compte ne dispose pas des droits nécessaires pour cette action.',404:'La ressource demandée est introuvable. Actualisez la page.',409:'Les données ont changé. Actualisez la page puis recommencez.',422:'La demande contient une valeur manquante ou invalide. Vérifiez les champs saisis.',429:'Trop de demandes ont été envoyées. Patientez avant de réessayer.',500:'Le serveur a rencontré une erreur interne. Réessayez puis créez un ticket si cela persiste.',502:'Le service sollicité n’a pas fourni de réponse exploitable. Réessayez dans quelques instants.',503:'Le service est temporairement indisponible. Réessayez plus tard.',504:'Le serveur a dépassé le délai de réponse. Réduisez la recherche puis réessayez.'};throw new Error(typeof d.detail==='string'?d.detail:(messages[r.status]||`La demande a échoué (code HTTP ${r.status}). Créez un ticket si le problème persiste.`))}
   return d}
+function erreurHTML(message){return `<div class="incident" role="alert"><p>${esc(message)}</p><a class="support-ticket" href="/ticket-demo" target="_blank" rel="noopener noreferrer">Créer un ticket ↗</a></div>`}
 async function start(){
   try{const me=await api('/api/me');
     $('me').textContent=me.username+(me.service?' · '+me.service:'');$('adm').hidden=me.role!=='admin';
-    convs=await api('/api/conversations');await ouvrir(convs[0]?.id||null)}catch(x){$('thread').textContent=x.message}}
+    convs=await api('/api/conversations');await ouvrir(convs[0]?.id||null)}catch(x){$('thread').innerHTML=erreurHTML(x.message)}}
 // Les conversations arrivent sans leurs messages (liste légère) : on les charge à l'ouverture.
 async function charger(c){if(c.messages)return;const d=await api('/api/conversations/'+c.id);c.messages=d.messages}
 async function ouvrir(id){cur=id;hist();const c=conv();
-  if(c&&!c.messages){$('thread').innerHTML='<div class="empty">Chargement…</div>';try{await charger(c)}catch{}}
+  if(c&&!c.messages){$('thread').innerHTML='<div class="empty">Chargement…</div>';try{await charger(c)}catch(x){$('thread').innerHTML=erreurHTML(x.message);return}}
   if(cur===id)thread()}
 $('out').onclick=async()=>{await api('/api/logout','POST');location.href='/'};
 $('pw').onclick=async()=>{const a=prompt('Mot de passe actuel :');if(!a)return;const n=prompt('Nouveau (10 caractères min.) :');if(!n)return;
@@ -104,7 +107,7 @@ function thread(){const t=$('thread');t.innerHTML='';const c=conv();
 function bubble(cls,html){const d=document.createElement('div');d.className='m '+cls;d.innerHTML=`<div class="bub${cls==='e'?' e':''}">${html}</div>`;
   $('thread').appendChild(d);d.scrollIntoView();return d}
 function assistant(m){
-  if(m.erreur)return bubble('a e',esc(m.erreur));
+  if(m.erreur)return bubble('a e',erreurHTML(m.erreur));
   const d=document.createElement('div');d.className='m a';let h='';
   if(m.reponse)h+=`<div class="bub">${esc(m.reponse)}</div>`;
   else if(m.attente)h+='<div class="bub txt"><i>Rédaction de la réponse…</i></div>';
@@ -151,7 +154,7 @@ function loadChart(){if(typeof Chart!=='undefined')return Promise.resolve();
     sc.src='https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';sc.onload=ok;
     sc.onerror=()=>{chartLib=null;ko()};document.head.appendChild(sc)}))}
 async function chart(cv,r,g){g=g||r.graphique;
-  try{await loadChart()}catch{cv.parentElement.textContent='Graphique indisponible (bibliothèque Chart.js non chargée).';return}
+  try{await loadChart()}catch{cv.parentElement.innerHTML=erreurHTML('Le graphique ne peut pas être chargé : la bibliothèque graphique externe est inaccessible. Vérifiez votre connexion ou les restrictions réseau. Le tableau reste consultable.');return}
   const rows=r.rows.slice(0,100),pie=g.type==='pie'||g.type==='doughnut';
   new Chart(cv,{type:g.type,data:{labels:rows.map(x=>String(x[g.x]??'')),datasets:g.y.map((c,i)=>({label:c,data:rows.map(x=>Number(x[c])),
     backgroundColor:pie?PAL:PAL[i%8],borderColor:pie?'#fff':PAL[i%8],tension:.25}))},
@@ -174,7 +177,7 @@ $('f').onsubmit=async e=>{e.preventDefault();const q=$('q').value.trim();if(!q||
   // Le tableau est déjà affiché : la phrase de réponse arrive ensuite, sans bloquer l'utilisateur.
   if(m.attente)api('/api/ask/'+m.id+'/texte','POST')
     .then(t=>{m.reponse=t.reponse;m.attente=false;majTexte(node,t.reponse)})
-    .catch(x=>{m.attente=false;majTexte(node,'(Réponse texte indisponible : '+x.message+')')})
-  }catch(x){bubble('a e',esc(x.message))}
+    .catch(x=>{m.attente=false;const b=node.querySelector('.txt');if(b)b.innerHTML=erreurHTML(x.message)})
+  }catch(x){bubble('a e',erreurHTML(x.message))}
   finally{sending=false;$('send').disabled=false;$('send').innerHTML='Envoyer <span aria-hidden="true">↑</span>';$('q').disabled=false;$('thread').setAttribute('aria-busy','false');$('q').focus()}};
-</script><script src="/static/actions.js?v=20261015-predictions-3"></script><script src="/static/espace.js?v=20261015-predictions-3"></script><script src="/static/predictions.js?v=20261015-predictions-3"></script><script>start();</script></body></html>
+</script><script src="/static/actions.js?v=20261015-predictions-3"></script><script src="/static/espace.js?v=20261015-erreurs-1"></script><script src="/static/predictions.js?v=20261015-erreurs-1"></script><script>start();</script></body></html>

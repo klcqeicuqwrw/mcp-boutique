@@ -43,6 +43,12 @@ def page_admin(request: Request):
     return FileResponse(WEB / "admin.html")
 
 
+@router.get("/ticket-demo")
+def page_ticket_demo():
+    """Clin d'œil de démonstration depuis les boutons d'assistance."""
+    return FileResponse(WEB / "ticket-demo.html", headers={"Cache-Control": "no-store"})
+
+
 # --- Carte du patrimoine ---------------------------------------------------------
 
 @router.get("/carte")

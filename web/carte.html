@@ -67,6 +67,7 @@
     m.textContent = texte;              // textContent : jamais de HTML venant de la base
     m.className = erreur ? "erreur" : "";
     m.hidden = !texte;
+    if(erreur){const a=document.createElement('a');a.href='/ticket-demo';a.target='_blank';a.rel='noopener noreferrer';a.textContent='Créer un ticket ↗';a.style.cssText='display:inline-block;margin-left:12px;padding:8px 12px;background:#d92b1f;color:white;border-radius:8px;text-decoration:none';m.appendChild(a)}
   }
 
   // Contenu de l'infobulle construit avec le DOM (aucun innerHTML => pas de XSS via les données).
@@ -125,7 +126,7 @@
       const url = '/api/carte' + (filtres.size ? '?' + filtres.toString() : '');
       r = await fetch(url, { credentials: "same-origin", cache: "no-store" });
     } catch (e) {
-      return message("Serveur injoignable.", true);
+      return message("Connexion au serveur de la carte impossible. Vérifiez votre connexion réseau et que le serveur est démarré.", true);
     }
     if (r.status === 401) { location.href = "/"; return; }
     if (!r.ok) {

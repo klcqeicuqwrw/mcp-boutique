@@ -32,7 +32,7 @@ function afficherImpayes(body,p,v){
   (async()=>{try{await loadChart();if(v!==panneauVersion||!graph.isConnected)return;const cv=document.createElement('canvas');cv.setAttribute('role','img');cv.setAttribute('aria-label','Historique et projection des impayés, également disponibles dans le tableau');graph.appendChild(cv);
     const base=p.historique.map(r=>r.montant),projection=Array(base.length-1).fill(null).concat([base.at(-1),p.montant_prevu]);
     new Chart(cv,{type:'line',data:{labels:p.historique.map(r=>moisPrediction(r.mois)).concat(moisPrediction(p.mois_projection)),datasets:[{label:'Historique fictif (€)',data:base.concat(null),borderColor:'#1E1214',backgroundColor:'#1E1214',tension:0},{label:'Projection expérimentale (€)',data:projection,borderColor:'#E62A00',backgroundColor:'#E62A00',borderDash:[6,5],tension:0}]},options:{responsive:true,animation:false,maintainAspectRatio:false,scales:{y:{beginAtZero:true}},plugins:{legend:{position:'bottom'}}}});
-  }catch{graph.textContent='Courbe indisponible. Les valeurs restent consultables dans le tableau.'}})();
+  }catch{if(v===panneauVersion&&graph.isConnected)graph.innerHTML=erreurHTML('Le graphique des prévisions ne peut pas être chargé : la bibliothèque graphique externe est inaccessible. Vérifiez votre connexion ou les restrictions réseau. Les valeurs restent consultables dans le tableau.')}})();
 }
 
 function afficherEquipements(body,p,au){

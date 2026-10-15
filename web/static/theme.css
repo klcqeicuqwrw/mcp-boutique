@@ -189,3 +189,7 @@ body:has(#main){height:100dvh}
   .suggestion strong{font-size:12px;gap:4px}
 }
 @container(max-height:180px){.welcome-identity{display:none}}
+.incident{padding:16px;background:#fff1ee;border:1px solid #ffc8bd;border-radius:12px;color:#8c291e;line-height:1.5;overflow-wrap:anywhere}
+.incident p{margin:0 0 12px}.incident small{display:block;margin-top:10px;font-size:12px;color:#70453f}
+.support-ticket{display:inline-flex;align-items:center;padding:10px 16px;border-radius:9px;background:var(--action-red);color:#fff;text-decoration:none;font-weight:700;font-size:13px}
+.support-ticket:hover{background:var(--action-red-hover)}

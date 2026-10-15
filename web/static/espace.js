@@ -18,14 +18,15 @@ function panneau(titre){
   if(!d.open)d.showModal();
   return ++panneauVersion;
 }
-function erreurPanneau(version,x){if(version===panneauVersion)$('workspace-body').innerHTML=`<p class="workspace-error" role="alert">${esc(x.message)}</p>`}
+function erreurPanneau(version,x){if(version===panneauVersion)$('workspace-body').innerHTML=erreurHTML(x.message)}
+function erreurAction(b,x){const parent=b.parentElement;parent.querySelector(':scope > .incident')?.remove();parent.insertAdjacentHTML('beforeend',erreurHTML(x.message))}
 
 function ajouterOutilsResultat(node,message){
   const r=message.resultats;
   if(message.id&&message.question){
     const barre=document.createElement('div');barre.className='result-tools';
     const b=document.createElement('button');b.type='button';b.textContent='☆ Enregistrer la recherche';
-    b.onclick=async()=>{b.disabled=true;try{await api('/api/espace/favoris','POST',{label:message.question.slice(0,120),question:message.question});b.textContent='★ Recherche enregistrée'}catch(x){b.textContent=x.message;b.disabled=false}};
+    b.onclick=async()=>{b.disabled=true;try{await api('/api/espace/favoris','POST',{label:message.question.slice(0,120),question:message.question});b.textContent='★ Recherche enregistrée'}catch(x){erreurAction(b,x);b.disabled=false}};
     barre.appendChild(b);node.appendChild(barre);
   }
   const table=node.querySelector('table');if(!table)return;
@@ -109,7 +110,7 @@ function ajouterEvolution(node,r){
       const lignes=[...mois.values()].sort((a,b)=>String(a.Annee_mois).localeCompare(String(b.Annee_mois)));
       new Chart(cv,{type:'line',data:{labels:lignes.map(x=>formatDate(x.Annee_mois)),datasets:ys.map((c,i)=>({label:libelleColonne(c)+' (€)',data:lignes.map(x=>x[c]==null?null:Number(x[c])),borderColor:PAL[i],backgroundColor:PAL[i],tension:.2}))},options:{responsive:true,plugins:{legend:{position:'bottom'}}}});
       b.textContent='Évolution affichée'+(r.truncated?' (historique limité)':'');
-    }catch(x){b.textContent=x.message;b.disabled=false}
+    }catch(x){erreurAction(b,x);b.disabled=false}
   };
 }
 
@@ -128,7 +129,7 @@ async function chargerTache(code,au,v,b){
   try{const d=await api(`/api/espace/a-traiter?au=${encodeURIComponent(au)}&categorie=${encodeURIComponent(code)}`);if(v!==panneauVersion||request!==tacheVersion)return;const c=d.cartes[0];target.innerHTML=`<h3>${esc(c.titre)}</h3><p>${esc(c.description)}</p>`;
     if(!c.disponible){target.appendChild(document.createTextNode('Ces données ne sont plus accessibles.'));return}
     const tables={affaires:'Affaire',commandes:'Commande',diagnostics:'Diagnostic',departs:'Bail',mandats:'Copropriete',comptes:'Releve_compte_client_historique'};target.appendChild(tableauEspace(c.resultats,tables[code]));target.scrollIntoView({block:'nearest'});
-  }catch(x){if(v===panneauVersion&&request===tacheVersion)target.textContent=x.message}
+  }catch(x){if(v===panneauVersion&&request===tacheVersion)target.innerHTML=erreurHTML(x.message)}
 }
 
 async function ouvrirFavoris(){
@@ -137,7 +138,7 @@ async function ouvrirFavoris(){
     if(!favoris.length){body.insertAdjacentHTML('beforeend','<div class="workspace-empty">Aucune recherche enregistrée. Sous une réponse du chat, cliquez sur « Enregistrer la recherche ».</div>');return}
     favoris.forEach(f=>{const item=document.createElement('div');item.className='favorite-item';const texte=document.createElement('div');const h=document.createElement('strong');h.textContent=f.label;const p=document.createElement('p');p.textContent=f.question;texte.append(h,p);item.appendChild(texte);
       const run=document.createElement('button');run.type='button';run.textContent='Relancer ↗';run.onclick=()=>{if(sending){run.textContent='Attendez la réponse en cours';return}$('workspace-dialog').close();$('q').value=f.question;$('f').requestSubmit()};
-      const del=document.createElement('button');del.type='button';del.className='favorite-delete';del.textContent='Supprimer';del.onclick=async()=>{del.disabled=true;try{await api('/api/espace/favoris/'+f.id,'DELETE');ouvrirFavoris()}catch(x){del.disabled=false;del.textContent=x.message}};
+      const del=document.createElement('button');del.type='button';del.className='favorite-delete';del.textContent='Supprimer';del.onclick=async()=>{del.disabled=true;try{await api('/api/espace/favoris/'+f.id,'DELETE');ouvrirFavoris()}catch(x){del.disabled=false;erreurAction(del,x)}};
       item.append(run,del);body.appendChild(item)});
   }catch(x){erreurPanneau(v,x)}
 }

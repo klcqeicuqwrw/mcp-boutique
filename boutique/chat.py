@@ -12,6 +12,7 @@ from dictionnaire import contexte_dictionnaire
 from boutique.graphiques import choisir_graphique
 from boutique.requetes_rapides import sql_comptage
 from boutique import localisation
+from boutique.erreurs import erreur_ia
 
 MOTS_GRAPH = re.compile(r"graph|courbe|histogramme|camembert|diagramme|chart|plot", re.I)
 
@@ -124,7 +125,7 @@ def ask(p: Question, u=Depends(user_dep)):
     try:
         schema = S.schema_text(allowed)
     except Exception as e:
-        raise HTTPException(500, f"Base métier inaccessible : {e}")
+        raise HTTPException(503, "La base métier est inaccessible sur le serveur. L’administrateur doit vérifier le fichier de données et ses droits d’accès.") from e
     if not schema:
         raise HTTPException(403, "Aucune donnée n'est accessible à votre service. Contactez un administrateur.")
 
@@ -193,8 +194,7 @@ def ask(p: Question, u=Depends(user_dep)):
             S.log_query(u, question, sql, "erreur")
 
     if erreur_primaire is not None:
-        nom = "OpenAI" if p.fournisseur == "openai" else "Gemini"
-        erreur = f"{nom} n'a pas pu répondre. Vérifiez sa clé API et sa disponibilité, puis réessayez."
+        erreur = erreur_ia(erreur_primaire, p.fournisseur, "sql" if sql is not None else "generation")
         enregistrer(sql=sql, erreur=erreur)
         raise HTTPException(502, erreur) from erreur_primaire
 
@@ -258,7 +258,8 @@ def ask_texte(mid: int, u=Depends(user_dep)):
     try:
         rep = formuler_reponse(m["question"], resultats, log=journal, sql=m["sql"])
     except Exception as e:
-        raise HTTPException(502, "La synthèse IA est temporairement indisponible. Le tableau reste accessible.")
+        fournisseur = resultats.get("fournisseur_ia", "gemini")
+        raise HTTPException(502, erreur_ia(e, fournisseur) + " Le tableau reste accessible.") from e
     if not S.scope_actuel(u, scope):
         raise HTTPException(403, "Vos droits ont changé pendant la demande. Reposez la question.")
         
