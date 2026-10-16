@@ -85,7 +85,7 @@ nouvelles routes et migrer automatiquement la base applicative (table des favori
 Tests dédiés : `python -m pytest test_espace.py -q`.
 
 Application FastAPI pour interroger une base SQLite en français avec Gemini,
-ou OpenAI, au choix dans le chat.
+ou Groq, au choix dans le chat.
 Elle propose un chat, des tableaux, graphiques, exports, une carte du patrimoine
 et une administration des utilisateurs et des permissions. Un serveur MCP local
 permet également de consulter la base depuis un assistant compatible.
@@ -134,22 +134,21 @@ ne peut consulter aucune table. `/health` expose seulement l'état HTTP.
 Voir `.env.example` pour les noms des variables, sans secrets. Ne jamais publier
 `.env`, `app.db` ni les bases métier contenant des données réelles.
 
-Le chat propose une pastille coulissante Gemini / OpenAI et conserve le choix
-sur ce navigateur. Chaque demande utilise uniquement le fournisseur choisi,
-y compris pour la synthèse d'analyse. Aucun secours automatique n'est effectué,
-même en cas d'erreur ou de résultat vide. Les caches SQL sont séparés par fournisseur.
-Les comptages simples et les synthèses simples restent locaux.
+Le chat propose Gemini / Groq et conserve le choix dans le navigateur.
+Chaque demande utilise uniquement le fournisseur choisi, y compris pour la
+synthese d'analyse. Aucun secours automatique n'est effectue. Les permissions
+et la validation SQL restent appliquees avec tous les fournisseurs.
 
-Renseigner `GEMINI_API_KEY` pour Gemini ou `OPENAI_API_KEY` pour OpenAI dans
-`.env`, puis redémarrer le serveur. Ne pas coller les clés dans le chat.
-`OPENAI_MODEL` vaut `gpt-4.1-mini` par défaut. OpenAI utilise l'API Responses,
-des sorties SQL structurées et `store=False`.
-`GEMINI_TIMEOUT_SECONDS` vaut 20 secondes par défaut et
-`OPENAI_TIMEOUT_SECONDS` vaut 30 secondes. Les retries automatiques sont désactivés.
-Une erreur indique le fournisseur concerné ; les permissions restent appliquées.
+Configurer `GROQ_API_KEY` dans `.env` pour Groq. `GROQ_MODEL` vaut
+`openai/gpt-oss-20b` et `GROQ_TIMEOUT_SECONDS` vaut 30 secondes par defaut.
+Le client utilise l'endpoint Groq `https://api.groq.com/openai/v1`, via le SDK
+OpenAI deja installe, et Chat Completions avec sortie JSON validee localement.
+Une cle Groq ne doit pas etre placee dans `OPENAI_API_KEY`.
+Les anciennes preferences OpenAI du navigateur selectionnent maintenant Groq.
+L'API conserve le fournisseur `openai` pour compatibilite avec les anciens
+resultats, avec une vraie cle `OPENAI_API_KEY` et `OPENAI_MODEL`.
+Les journaux IA (`gemini_log`) distinguent les appels avec le prefixe `groq/`.
 
-Les modèles, tokens et erreurs figurent dans le journal IA existant
-(`gemini_log`). Les appels OpenAI portent le préfixe `openai/`.
 Seuls les schémas et historiques autorisés sont transmis au fournisseur choisi.
 
 - `SQLITE_DB_PATH` : base métier, ouverte exclusivement en lecture seule.
@@ -214,7 +213,52 @@ sans aucune colonne marquée. Les écarts avec le schéma sont signalés. Mettre
 jour la classification à chaque changement de base ; il ne s'agit pas d'une
 détection automatique de toutes les données personnelles. Cette classification
 MCP est distincte des permissions web, définies dans l'administration.
-Le transport MCP HTTP ne gère pas les comptes web : conserver l'écoute locale.
+Le transport MCP HTTP ne gère pas les comptes web : l'écoute est désormais
+limitée aux adresses de boucle locale (`127.0.0.1`, `::1`, `localhost`). Une
+adresse réseau, un transport inconnu ou un port invalide provoquent un refus
+explicite au démarrage. Une table autorisée inexistante est également refusée.
+
+La configuration VS Code `.vscode/mcp.json` active le blocage RGPD et impose
+`stdio`. Pour une démonstration avec les seules données fictives, une valeur
+explicite `MCP_BLOQUER_RGPD=0` peut toujours désactiver ce blocage. Une faute
+de saisie dans cette variable conserve la protection par défaut. Lorsque le
+blocage est actif, les tables et colonnes absentes du dictionnaire sont aussi
+interdites ; si le dictionnaire disparaît pendant une session, les lectures
+sont refusées. Les aperçus excluent ces colonnes et la recherche de colonnes
+consulte le schéma réel pour éviter de proposer des colonnes supprimées.
+
+Protections de ressources du serveur MCP :
+
+- `MCP_MAX_CONCURRENT=4` : au plus quatre outils s'exécutent à la fois (maximum
+  configurable : 16). Les appels supplémentaires reçoivent « Serveur occupé ».
+  Annuler un appel signale son arrêt au traitement SQLite ; la place reste
+  occupée jusqu'à la fin effective du travail.
+- `MCP_SQL_TIMEOUT=20` : délai SQL, plafonné à 120 secondes, y compris pour
+  le comptage d'une description de table. L'annulation et le délai sont vérifiés
+  par le gestionnaire de progression SQLite.
+- `MCP_MAX_SQL_CHARS=100000` : longueur SQL maximale en **octets UTF-8**,
+  plafonnée à 100 000 ; SQLite limite aussi colonnes, profondeur d'expressions
+  et requêtes composées.
+- `MCP_MAX_ROWS=500` et `MCP_MAX_CHARS=60000` : lecture progressive des résultats,
+  sans charger toutes les lignes avant de limiter la réponse. JSON et Markdown
+  respectent la limite de caractères ; une ligne trop grande est refusée avec
+  une aide pour réduire sa taille. Les descriptions trop longues sont refusées
+  plutôt que coupées en plein JSON. La troncature porte sur des lignes entières.
+- Les alias SQL répétés sont renommés sans perdre les valeurs, même si une
+  colonne porte déjà un nom comme `a_2`.
+
+Ces limites réduisent les risques de surcharge ; elles ne constituent pas
+un quota mémoire du processus ni une isolation système. Une fonction SQLite
+coûteuse peut ne vérifier l'annulation qu'au prochain rappel de progression.
+Les droits MCP restent distincts des permissions par collaborateur du site.
+Une mise à disposition distante nécessiterait une authentification et des
+droits adaptés, qui ne sont pas implémentés ici.
+
+Vérification : `python -m pytest test_server.py -q`. Les tests couvrent notamment
+une vraie session MCP `stdio` (initialisation, découverte des six outils,
+lecture, refus RGPD/écriture et poursuite de la session après erreur), la
+surcharge, l'annulation, les alias et les tailles de réponse. Après une mise à
+jour, redémarrer `bailleur-social` depuis `MCP: List Servers` dans VS Code.
 
 ## Tests et évaluation métier
 
@@ -246,7 +290,7 @@ d'erreur. Elle est prévue pour le schéma DWH fourni et n'est pas lancée par p
 - `boutique/dependencies.py` : contrôles de session, CSRF et rôle administrateur.
 - `boutique/auth.py`, `chat.py`, `exports.py`, `admin.py`, `pages.py` : routes par fonction.
 - `boutique/graphiques.py` : sélection des graphiques.
-- `api.py` : clients Gemini/OpenAI, génération SQL et synthèse.
+- `api.py` : clients Gemini/Groq/OpenAI, génération SQL et synthèse.
 - `dictionnaire.py` : parsing partagé et construction du contexte métier filtré.
 - `securite.py` : comptes, sessions, droits, exécution SQL et journaux.
 - `server.py` : outils MCP et protections propres à ce transport.

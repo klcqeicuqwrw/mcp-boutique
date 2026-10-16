@@ -1,5 +1,7 @@
 'use strict';
 
+const PATRIMAGE_URL='https://app.powerbi.com/groups/me/apps/e8d55373-ef61-4cba-acd1-df4ea86142bc/reports/27c8ca41-70d4-4671-9335-a9877420d8a9/873b06b26127a693a7e0?ctid=a957327b-1840-4e74-be27-90218a7a2be5&experience=power-bi&chromeless=true';
+
 const TYPES_FICHE={id_client:'client',id_lot:'lot',id_patrimoine:'patrimoine',id_commande:'commande',id_affaire:'affaire',id_diagnostic:'diagnostic',id_occupant:'occupant',id_copropriete:'copropriete'};
 const NOMS_FICHE={client:'Fiche client',lot:'Fiche logement',patrimoine:'Fiche résidence',commande:'Fiche commande',affaire:'Fiche affaire',diagnostic:'Fiche diagnostic',occupant:'Fiche occupant',copropriete:'Fiche copropriété'};
 let panneauVersion=0;
@@ -44,7 +46,7 @@ function ajouterOutilsResultat(node,message){
 
 function outilsLigne(row,ids=Object.keys(row).filter(c=>TYPES_FICHE[c.toLowerCase()]),liens=Object.keys(row).filter(c=>/^lien_/i.test(c))){
   const outils=document.createElement('div');outils.className='row-tools';
-  ids.forEach(c=>{const v=row[c];if(v==null||v===''||String(v).includes(','))return;const type=TYPES_FICHE[c.toLowerCase()];const b=document.createElement('button');b.type='button';b.textContent=NOMS_FICHE[type];b.onclick=()=>ouvrirFiche(type,String(v));outils.appendChild(b)});
+  if(ids.some(c=>row[c]!=null&&row[c]!==''))outils.appendChild(lienBouton('Ouvrir dans Patrimage',PATRIMAGE_URL));
   const deja=new Set();
   liens.forEach(c=>{if(/google_maps|google_earth/i.test(c))return;const url=lienSur(row[c]);if(!url||deja.has(url))return;deja.add(url);const titre=/ged/i.test(c)?'Ouvrir la GED':/diagnostic/i.test(c)&&!/ikos/i.test(c)?'Ouvrir le diagnostic':/ikos/i.test(c)?'Ouvrir dans IKOS':'Ouvrir le document';outils.appendChild(lienBouton(titre,url))});
   const col=['id_patrimoine','id_lot','id_client','id_occupant','id_affaire','id_diagnostic','id_copropriete','id_commande'].map(c=>ids.find(x=>x.toLowerCase()===c)).find(c=>c&&row[c]!=null&&row[c]!==''&&!String(row[c]).includes(','));

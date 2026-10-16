@@ -17,8 +17,8 @@ th{background:#fdf0ee!important}
 .model-switch{position:relative;display:grid;grid-template-columns:1fr 1fr;width:280px;max-width:100%;padding:4px;margin:0 auto 12px;background:#ececef;border:1px solid var(--bd);border-radius:999px;isolation:isolate}
 .model-switch input{position:absolute;opacity:0;width:1px;height:1px}
 .model-switch label{padding:12px 16px;text-align:center;border-radius:999px;cursor:pointer;font-size:14px;font-weight:700;transition:color .2s;user-select:none}
-.model-slider{position:absolute;z-index:-1;top:4px;bottom:4px;left:4px;width:calc(50% - 4px);background:var(--action-red);border-radius:999px;box-shadow:0 2px 6px #0002;transition:left .2s}
-.model-switch:has(#model-openai:checked) .model-slider{left:50%}
+.model-slider{position:absolute;z-index:-1;top:4px;bottom:4px;left:4px;width:calc(50% - 4px);background:var(--grad);border-radius:999px;box-shadow:0 2px 6px #0002;transition:left .2s}
+.model-switch:has(#model-groq:checked) .model-slider{left:50%}
 .model-switch input:checked+label{color:#fff}
 .model-switch input:focus-visible+label{outline:2px solid var(--acc);outline-offset:3px}
 @media(prefers-reduced-motion:reduce){.model-slider{transition:none}}
@@ -100,7 +100,11 @@ button:not(.p):not(.on):not(.btn):hover{border-color:var(--acc)}
 @keyframes thinking-pulse{0%,80%,100%{opacity:.35;transform:translateY(0)}40%{opacity:1;transform:translateY(-4px)}}
 #f{padding:6px;border:1px solid var(--bd);border-radius:20px;background:#fff;box-shadow:0 4px 20px #00000008;transition:border-color .2s,box-shadow .2s}
 #f:focus-within{border-color:#ff5a4f;box-shadow:0 0 0 4px #ff22000a}
-#q{min-width:0;border:0;background:transparent}#q:focus{outline:0}
+#q{min-width:0;border:0;background:transparent;font:inherit;line-height:22px;height:46px;max-height:134px;resize:none;white-space:pre-wrap;overflow-wrap:anywhere;overflow-x:hidden;overflow-y:hidden}#q:focus{outline:0}
+#f{align-items:flex-end}
+#thread>.m.a{max-width:100%;min-width:0;flex-shrink:0}
+#thread>.m.a>.bub{max-width:900px}
+#thread>.m.u .bub{white-space:pre-wrap;overflow-wrap:anywhere}
 #send{display:flex;align-items:center;justify-content:center;gap:12px;transition:filter .2s,transform .2s}
 #send span{font-size:22px;line-height:1}#send:hover{filter:brightness(.95)}#send:active{transform:scale(.97)}
 #send:disabled{opacity:.65;cursor:wait}

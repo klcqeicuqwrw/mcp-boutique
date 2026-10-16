@@ -14,6 +14,7 @@ Locataires.
 | `id` | `INTEGER` | PK | Identifiant |
 | `nom` | `TEXT` | RGPD | Nom du locataire |
 | `ville` | `TEXT` | | Ville |
+| `doc` | `BLOB` | | Document de test |
 
 ### DWH_Secret
 *Autre · exemple*
@@ -162,3 +163,175 @@ def test_format_invalide(srv):
     from mcp.server.mcpserver.exceptions import ToolError
     with pytest.raises(ToolError, match="format"):
         asyncio.run(srv.executer_requete_sql("SELECT 1", format="xml"))
+
+
+def test_alias_distincts_sans_perte(srv):
+    r=run(srv,'SELECT 1 AS a, 2 AS a, 3 AS a_2, 4 AS a')
+    assert len(set(r['columns']))==4
+    assert list(r['rows'][0].values())==[1,2,3,4]
+    assert r['rows'][0]['a_2']==3
+
+
+def test_une_ligne_enorme_est_refusee(srv,monkeypatch):
+    monkeypatch.setattr(srv,'MAX_CHARS',1000)
+    with pytest.raises(ValueError,match='ligne dépasse'):
+        run(srv,"SELECT printf('%.*c',5000,'x') AS texte")
+
+
+@pytest.mark.parametrize('format',['json','markdown'])
+def test_reponse_bornee_meme_avec_echappement(srv,monkeypatch,format):
+    monkeypatch.setattr(srv,'MAX_CHARS',1000)
+    out=asyncio.run(srv.executer_requete_sql("WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c WHERE x<100) SELECT x, printf('%.*c',50,'|') AS t FROM c",format))
+    assert len(out)<=1000
+    if format=='json':
+        r=json.loads(out)
+        assert r['truncated'] and 0<r['row_count']<100
+    else:
+        assert 'tronqué' in out
+
+
+def test_sql_trop_volumineux(srv,monkeypatch):
+    monkeypatch.setattr(srv,'MAX_SQL_CHARS',1000)
+    with pytest.raises(ValueError,match='volumineuse'):
+        run(srv,"SELECT '"+'x'*1000+"'")
+
+
+def test_colonne_ajoutee_non_documentee_bloquee(srv):
+    with sqlite3.connect(srv.DB_PATH) as con:
+        con.execute('ALTER TABLE DWH_Locataire ADD COLUMN telephone TEXT')
+        con.execute("UPDATE DWH_Locataire SET telephone='secret'")
+    with pytest.raises(PermissionError):
+        run(srv,'SELECT telephone FROM DWH_Locataire')
+    out=json.loads(asyncio.run(srv.apercu_table('DWH_Locataire')))
+    assert 'telephone' not in out['columns']
+
+
+def test_dictionnaire_supprime_en_cours_bloque(srv):
+    srv.DICO_PATH.unlink()
+    with pytest.raises(PermissionError,match='Protection RGPD'):
+        run(srv,'SELECT ville FROM DWH_Locataire')
+
+
+def test_faute_configuration_rgpd_ne_desactive_pas(srv,monkeypatch):
+    monkeypatch.setenv('MCP_BLOQUER_RGPD','treu')
+    assert srv._booleen('MCP_BLOQUER_RGPD',True) is True
+
+
+def test_table_autorisee_inexistante(srv,monkeypatch):
+    monkeypatch.setattr(srv,'TABLES_AUTORISEES',{'dwh_inexistante'})
+    with pytest.raises(SystemExit,match='introuvables'):
+        srv.verifier_demarrage()
+
+
+@pytest.mark.parametrize('config',[
+    {'MCP_TRANSPORT':'sdtio'},
+    {'MCP_TRANSPORT':'http','MCP_HOST':'0.0.0.0'},
+    {'MCP_TRANSPORT':'http','MCP_HOST':'127.0.0.1','MCP_PORT':'invalid'},
+    {'MCP_TRANSPORT':'http','MCP_HOST':'127.0.0.1','MCP_PORT':'65536'},
+])
+def test_demarrage_invalide_refuse(srv,monkeypatch,config):
+    for k,v in config.items():
+        monkeypatch.setenv(k,v)
+    with pytest.raises(SystemExit):
+        srv.lancer()
+
+
+def test_demarrage_http_sdk_installe_transmet_port(srv,monkeypatch):
+    monkeypatch.setenv('MCP_TRANSPORT','http')
+    monkeypatch.setenv('MCP_HOST','127.0.0.1')
+    monkeypatch.setenv('MCP_PORT','8765')
+    appels=[]
+    monkeypatch.setattr(srv.mcp,'run',lambda *a,**kw:appels.append((a,kw)))
+    srv.lancer()
+    assert appels==[(('streamable-http',),{'host':'127.0.0.1','port':8765})]
+
+
+def test_annulation_libere_vraiment_le_travail(srv,monkeypatch):
+    import threading
+    import time
+    places=threading.BoundedSemaphore(1)
+    monkeypatch.setattr(srv,'_places',places)
+    monkeypatch.setattr(srv,'SQL_TIMEOUT',10)
+    demarre,fini=threading.Event(),threading.Event()
+    @srv._lisible
+    def long():
+        try:
+            demarre.set()
+            run(srv,'WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c) SELECT COUNT(*) FROM c')
+            return 'inattendu'
+        finally:
+            fini.set()
+    async def scenario():
+        appel=asyncio.create_task(long())
+        while not demarre.is_set():
+            await asyncio.sleep(.005)
+        appel.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await appel
+        limite=time.monotonic()+3
+        while not fini.is_set() and time.monotonic()<limite:
+            await asyncio.sleep(.005)
+        assert fini.is_set(), 'Le calcul SQL doit arreter avant son timeout normal'
+        acquis=places.acquire(blocking=False)
+        while not acquis and time.monotonic()<limite:
+            await asyncio.sleep(.005)
+            acquis=places.acquire(blocking=False)
+        assert acquis
+        places.release()
+    asyncio.run(scenario())
+
+
+def test_surcharge_refusee(srv,monkeypatch):
+    import threading
+    places=threading.BoundedSemaphore(1)
+    places.acquire()
+    monkeypatch.setattr(srv,'_places',places)
+    with pytest.raises(srv.ToolError,match='occupé'):
+        asyncio.run(srv.lister_tables())
+    places.release()
+
+
+def test_metadonnees_trop_grandes(srv,monkeypatch):
+    monkeypatch.setattr(srv,'MAX_CHARS',10)
+    with pytest.raises(srv.ToolError,match='taille de réponse'):
+        asyncio.run(srv.lister_tables())
+
+
+def test_recherche_ignore_colonne_supprimee(srv):
+    with sqlite3.connect(srv.DB_PATH) as con:
+        con.execute('ALTER TABLE DWH_Locataire DROP COLUMN ville')
+    r=json.loads(asyncio.run(srv.rechercher_colonnes('ville')))
+    assert r['total_trouve']==0
+
+
+def test_protocole_stdio_reel(srv):
+    """Initialisation, découverte et erreurs via les vrais messages MCP."""
+    import os
+    import sys
+    from pathlib import Path
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+    async def scenario():
+        root=Path(__file__).resolve().parent
+        env=dict(os.environ,SQLITE_DB_PATH=str(srv.DB_PATH),DICTIONNAIRE_PATH=str(srv.DICO_PATH),
+                 MCP_JOURNAL='',MCP_BLOQUER_RGPD='1',MCP_TRANSPORT='stdio')
+        params=StdioServerParameters(command=sys.executable,args=[str(root/'server.py')],cwd=str(root),env=env)
+        async with stdio_client(params) as (reader,writer):
+            async with ClientSession(reader,writer) as session:
+                await session.initialize()
+                liste=await session.list_tools()
+                assert {t.name for t in liste.tools}=={'lister_tables','rechercher_colonnes','decrire_table',
+                    'apercu_table','valeurs_distinctes','executer_requete_sql'}
+                for t in liste.tools:
+                    assert t.annotations.read_only_hint
+                resultat=await session.call_tool('executer_requete_sql',{'requete':'SELECT ville FROM DWH_Locataire','format':'json'})
+                assert not resultat.is_error
+                assert json.loads(resultat.content[0].text)['row_count']==3
+                for sql in ['SELECT nom FROM DWH_Locataire','DELETE FROM DWH_Locataire','SELECT x FROM DWH_Secret']:
+                    refus=await session.call_tool('executer_requete_sql',{'requete':sql})
+                    assert refus.is_error
+                    assert 'top' not in refus.content[0].text and 'Durand' not in refus.content[0].text
+                # Une erreur d'outil ne doit pas casser la session.
+                suite=await session.call_tool('lister_tables',{})
+                assert not suite.is_error
+    asyncio.run(asyncio.wait_for(scenario(),timeout=20))

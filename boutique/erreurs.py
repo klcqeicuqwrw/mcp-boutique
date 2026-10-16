@@ -3,7 +3,7 @@ import httpx
 
 
 def erreur_ia(exc, fournisseur, etape="generation"):
-    nom = "OpenAI" if fournisseur == "openai" else "Gemini"
+    nom = {"openai": "OpenAI", "groq": "Groq", "gemini": "Gemini"}.get(fournisseur, fournisseur)
     status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
     # Le texte ne sert qu'à classer l'erreur ; il n'est jamais renvoyé au navigateur.
     texte = (str(exc) + " " + str(getattr(exc, "body", ""))).lower()
@@ -14,6 +14,8 @@ def erreur_ia(exc, fournisseur, etape="generation"):
         return "La requête produite par l’IA ne peut pas être exécutée dans la base. Reformulez la question avec les données et les filtres souhaités. Si cela se reproduit, créez un ticket."
     if "api_key" in texte and ("manquante" in texte or "not configured" in texte):
         return f"{nom} n’est pas configuré : sa clé API est absente sur le serveur. Demandez à l’administrateur de configurer ce fournisseur ou choisissez l’autre modèle."
+    if status == 413 or "contextegroqtroplong" in genre or "request too large" in texte:
+        return f"La demande dépasse la taille de contexte autorisée par {nom}. Raccourcissez la question ou choisissez l’autre fournisseur. Si cela persiste, faites vérifier les limites du compte API."
     if any(x in texte for x in ("credit_balance_exhausted", "insufficient_quota", "billing_hard_limit", "billing_not_active")):
         return f"{nom} refuse la demande : le crédit API est épuisé ou la facturation API n’est pas active. L’administrateur doit vérifier le compte API. Choisissez l’autre modèle en attendant."
     if status == 401 or any(x in texte for x in ("api_key_invalid", "invalid_api_key", "api key not valid")):

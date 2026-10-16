@@ -9,8 +9,10 @@
       "cwd": "${workspaceFolder}",
       "env": {
         "SQLITE_DB_PATH": "${workspaceFolder}/DWH_fictive_10000_lignes.sqlite",
-        "MCP_BLOQUER_RGPD": "0",
-        "MCP_SQL_TIMEOUT": "20"
+        "MCP_BLOQUER_RGPD": "1",
+        "MCP_TRANSPORT": "stdio",
+        "MCP_SQL_TIMEOUT": "20",
+        "MCP_MAX_CONCURRENT": "4"
       },
       // Optionnel : recharge le serveur à chaque sauvegarde + débogage pas à pas (VS Code récent)
       "dev": { "watch": "**/*.py", "debug": { "type": "debugpy" } }

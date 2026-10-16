@@ -36,7 +36,7 @@ th,td{border:1px solid var(--bd);padding:6px 10px;text-align:left}th{background:
   order: -1 !important;
 }
 </style>
-<link rel="stylesheet" href="/static/theme.css?v=20261015-erreurs-1">
+<link rel="stylesheet" href="/static/theme.css?v=20261016-composer-2">
 <link rel="icon" type="image/svg+xml" href="/static/toutatis.svg"></head><body>
 
 <div id="side"><div class="brand"><img src="/static/logo.png" alt="Aiguillon Construction"></div>
@@ -49,15 +49,27 @@ th,td{border:1px solid var(--bd);padding:6px 10px;text-align:left}th{background:
 <div id="thread"></div>
 <div id="bar"><div class="model-switch" role="radiogroup" aria-label="Choix du modèle IA">
 <input type="radio" name="model" id="model-gemini" value="gemini" checked><label for="model-gemini">Gemini</label>
-<input type="radio" name="model" id="model-openai" value="openai"><label for="model-openai">OpenAI</label><span class="model-slider" aria-hidden="true"></span>
+<input type="radio" name="model" id="model-groq" value="groq"><label for="model-groq">Groq</label><span class="model-slider" aria-hidden="true"></span>
 </div><div id="opt"><label><input type="checkbox" id="cr" checked> Réponse texte</label><label><input type="checkbox" id="ct" checked> Tableau</label></div>
-<form id="f"><input id="q" aria-label="Votre question" placeholder="Ex : Les logements avec un DPE F ou G" autocomplete="off" required>
+<form id="f"><textarea id="q" rows="1" aria-label="Votre question" placeholder="Ex : Les logements avec un DPE F ou G" autocomplete="off" required></textarea>
 <button class="btn" id="send">Envoyer <span aria-hidden="true">↑</span></button></form><div class="composer-hint">Une question, un tableau, une nouvelle perspective.</div></div></div>
 <script>
 const $=id=>document.getElementById(id);
+function ajusterQuestion(){
+  const q=$('q'),style=getComputedStyle(q);
+  const limite=5*parseFloat(style.lineHeight)+parseFloat(style.paddingTop)+parseFloat(style.paddingBottom);
+  q.style.height='auto';
+  q.style.height=Math.min(q.scrollHeight,limite)+'px';
+  q.style.overflowY=q.scrollHeight>limite?'auto':'hidden';
+}
+$('q').addEventListener('input',ajusterQuestion);
+$('q').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();$('f').requestSubmit()}
+});
+new ResizeObserver(ajusterQuestion).observe($('f'));
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let convs=[],cur=null,sending=false;
-try{if(localStorage.getItem('fournisseur-ia')==='openai')$('model-openai').checked=true}catch{}
+try{if(['openai','groq'].includes(localStorage.getItem('fournisseur-ia')))$('model-groq').checked=true}catch{}
 document.querySelectorAll('input[name="model"]').forEach(input=>input.onchange=()=>{try{localStorage.setItem('fournisseur-ia',input.value)}catch{}});
 async function api(path,method='GET',body){
   let r;
@@ -99,7 +111,7 @@ $('cr').onchange=$('ct').onchange=e=>{if(!$('cr').checked&&!$('ct').checked)(e.t
 function bienvenue(){
   const exemples=[['Patrimoine','Les logements avec un DPE F ou G'],['Localisation','Localise les logements par commune'],['Analyse','Le nombre de logements par commune']];
   $('thread').innerHTML=`<div class="welcome"><div class="welcome-identity" role="img" aria-label="Toutat'IS, assistant immobilier"><img src="/static/toutatis.svg" width="140" height="140" alt=""><p class="welcome-wordmark" aria-hidden="true">Toutat'<span>IS</span></p></div><h1>Que souhaitez-vous explorer ?</h1><p>Interrogez vos données et donnez vie à vos résultats.</p><div class="welcome-shortcuts"><button type="button" onclick="ouvrirTaches()">Voir les dossiers à traiter ↗</button><button type="button" onclick="ouvrirFavoris()">Retrouver mes recherches ★</button></div><div class="suggestions">${exemples.map(([titre,q])=>`<button type="button" class="suggestion" data-question="${esc(q)}"><strong>${titre}<span aria-hidden="true">↗</span></strong><span>${esc(q)}</span></button>`).join('')}</div><small>Choisissez une suggestion ou écrivez votre propre question.</small></div>`;
-  document.querySelectorAll('.suggestion').forEach(b=>b.onclick=()=>{$('q').value=b.dataset.question;$('q').focus()});
+  document.querySelectorAll('.suggestion').forEach(b=>b.onclick=()=>{$('q').value=b.dataset.question;ajusterQuestion();$('q').focus()});
 }
 function thread(){const t=$('thread');t.innerHTML='';const c=conv();
   if(!c||!(c.messages||[]).length){bienvenue();return}
@@ -166,7 +178,7 @@ $('f').onsubmit=async e=>{e.preventDefault();const q=$('q').value.trim();if(!q||
   if(!conv()){const c=await api('/api/conversations','POST');convs.unshift(c);cur=c.id}
   const c=conv();if(!c.messages){try{await charger(c)}catch{c.messages=[]}}
   if(!c.messages.length)$('thread').innerHTML='';
-  bubble('u',esc(q));$('q').value='';$('q').disabled=true;const w=bubble('a','<div class="thinking" role="status"><span class="thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span>J’explore vos données…</div>');
+  bubble('u',esc(q));$('q').value='';ajusterQuestion();$('q').disabled=true;const w=bubble('a','<div class="thinking" role="status"><span class="thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span>J’explore vos données…</div>');
   const m={question:q};
   try{const r=await api('/api/ask','POST',{conv_id:c.id,question:q,fournisseur:document.querySelector('input[name="model"]:checked').value,veut_reponse:$('cr').checked,veut_tableau:$('ct').checked});
     Object.assign(m,{id:r.id,reponse:r.reponse,sql_genere:r.sql_genere,resultats:r.resultats,attente:!!r.texte_en_attente})}
@@ -179,5 +191,5 @@ $('f').onsubmit=async e=>{e.preventDefault();const q=$('q').value.trim();if(!q||
     .then(t=>{m.reponse=t.reponse;m.attente=false;majTexte(node,t.reponse)})
     .catch(x=>{m.attente=false;const b=node.querySelector('.txt');if(b)b.innerHTML=erreurHTML(x.message)})
   }catch(x){bubble('a e',erreurHTML(x.message))}
-  finally{sending=false;$('send').disabled=false;$('send').innerHTML='Envoyer <span aria-hidden="true">↑</span>';$('q').disabled=false;$('thread').setAttribute('aria-busy','false');$('q').focus()}};
-</script><script src="/static/actions.js?v=20261015-predictions-3"></script><script src="/static/espace.js?v=20261015-erreurs-1"></script><script src="/static/predictions.js?v=20261015-erreurs-1"></script><script>start();</script></body></html>
+  finally{sending=false;$('send').disabled=false;$('send').innerHTML='Envoyer <span aria-hidden="true"></span>';$('q').disabled=false;$('thread').setAttribute('aria-busy','false');$('q').focus()}};
+</script><script src="/static/actions.js?v=20261015-predictions-3"></script><script src="/static/espace.js?v=20261016-patrimage-1"></script><script src="/static/predictions.js?v=20261015-erreurs-1"></script><script>start();</script></body></html>

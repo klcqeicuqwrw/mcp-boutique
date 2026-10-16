@@ -7,7 +7,7 @@ from boutique.dependencies import user_dep
 
 router = APIRouter()
 
-from api import MessageHistorique, formuler_reponse, generer_sql, DICTIONNAIRE_PATH
+from api import ReponseNaturelle, MessageHistorique, formuler_reponse, generer_sql, DICTIONNAIRE_PATH
 from dictionnaire import contexte_dictionnaire
 from boutique.graphiques import choisir_graphique
 from boutique.requetes_rapides import sql_comptage
@@ -77,7 +77,7 @@ def supprimer_conv(cid: str, u=Depends(user_dep)):
 
 class Question(BaseModel):
     conv_id: str
-    fournisseur: Literal["gemini", "openai"] = "gemini"
+    fournisseur: Literal["gemini", "groq", "openai"] = "gemini"
     question: str = Field(min_length=1, max_length=8000)
     veut_reponse: bool = True
     veut_tableau: bool = True
@@ -171,6 +171,13 @@ def ask(p: Question, u=Depends(user_dep)):
             sql = generer_sql(question, schema, hist, log=journal, dictionnaire=dictionnaire, fournisseur=p.fournisseur)
         except Exception as exc:
             erreur_primaire = exc
+
+    if isinstance(sql, ReponseNaturelle):
+        if not S.scope_actuel(u, scope):
+            raise HTTPException(403, "Vos droits ont change pendant la demande.")
+        mid = enregistrer(reponse=sql.texte)
+        return dict(id=mid, reponse=sql.texte, sql_genere=None,
+                    resultats=None, texte_en_attente=False)
 
     def verifier_droits():
         if not S.scope_actuel(u, scope):
