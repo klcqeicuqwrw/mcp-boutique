@@ -1,5 +1,6 @@
 """Lecture commune des dictionnaires Markdown, anciens tableaux et fiches DWH."""
 import re
+import unicodedata
 from pathlib import Path
 
 
@@ -60,13 +61,22 @@ Ne pas inventer de résultat ni généraliser un échantillon. Préférer les ag
 pour les questions de total ; limiter les listes détaillées."""
 
 
+def _mots(texte):
+    texte = "".join(c for c in unicodedata.normalize("NFKD", texte.lower())
+                    if not unicodedata.combining(c)).replace("_", " ")
+    mots = set(re.findall(r"[a-z0-9]{3,}", texte))
+    # Les demandes sont souvent au pluriel, les noms du schéma au singulier.
+    return {"moral" if m in {"moraux", "morale", "morales"}
+            else m[:-1] if m.endswith("s") and len(m) > 3 else m for m in mots}
+
+
 def contexte_dictionnaire(path: Path, schema: dict, question: str, limite=18000) -> str:
     """Filtre tables ET colonnes avant de classer les définitions pertinentes.
 
     Les descriptions libres, exemples, guides et jointures non filtrés ne sont
     jamais copiés : ils peuvent mentionner des données interdites.
     """
-    mots = set(re.findall(r"\w{3,}", question.lower()))
+    mots = _mots(question)
     candidats = []
     dico = lire_dictionnaire(path)
     interdits = {e['nom'] for t, e in dico.items() if t not in schema}
@@ -90,7 +100,11 @@ def contexte_dictionnaire(path: Path, schema: dict, question: str, limite=18000)
             )
             if interdit:
                 continue
-            score = len(mots & set(re.findall(r"\w{3,}", texte.lower().replace("_", " "))))
+            # Les noms de tables et colonnes priment sur un mot dans une longue
+            # liste de valeurs. Les mêmes mots servent aux deux côtés du score.
+            score = (4 * len(mots & _mots(entree['nom'] + " " + col['nom']))
+                     + 2 * len(mots & _mots(col['description']))
+                     + len(mots & _mots(texte)))
             candidats.append((score, texte))
     relations = contexte_relations(path, schema, dico)
     base = REGLES_SQL[:limite]

@@ -35,3 +35,16 @@ def test_decodage_naturel(monkeypatch, fournisseur):
     monkeypatch.setattr(api, '_appeler_et_journaliser', lambda *a, **kw: SimpleNamespace(text=texte))
     r = api.generer_sql("Explique un bail", "schema", [], fournisseur=fournisseur)
     assert isinstance(r, api.ReponseNaturelle)
+
+
+def test_relance_conserve_definitions_des_criteres_precedents(web, monkeypatch):
+    connecter(web)
+    cid = web.client.post('/api/conversations').json()['id']
+    web.client.post('/api/ask', json=dict(conv_id=cid, question='Liste des clients présents'))
+    contextes = []
+    monkeypatch.setattr(web.chat, 'contexte_dictionnaire',
+                        lambda path, schema, question: contextes.append(question) or '')
+    r = web.client.post('/api/ask', json=dict(conv_id=cid, question='Parmi ceux-là, donne les identifiants'))
+    assert r.status_code == 200, r.text
+    assert 'clients présents' in contextes[-1]
+    assert 'Parmi ceux-là' in contextes[-1]

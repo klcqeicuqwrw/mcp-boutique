@@ -2743,7 +2743,7 @@ Nombre de lignes : 412
    Valeurs observées (effectif) : Non (400)
 - Type_personne — Type SQLite : TEXT. NULL observés : non (0/412). Valeurs distinctes non NULL : 2.
    Confidentialité : RGPD
-   Description : Type de personne
+   Description : Type de personne : valeurs catégorielles exactes 'Physique' et 'Morale'. Pour les personnes morales (occupants moraux), filtrer Type_personne = 'Morale', jamais 'Moral' ni 'Personne morale'. Pour les clients moraux, utiliser les identifiants clients correspondants dans Occupant. La présence d'une raison sociale ou d'une forme juridique ne suffit pas : ces champs sont aussi remplis pour les personnes physiques dans cette base fictive.
    Format / valeurs indicatives : Physique / Morale
    Exemples : Physique
    Valeurs observées (effectif) : Physique (395) ; Morale (17)

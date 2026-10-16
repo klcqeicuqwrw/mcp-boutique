@@ -25,6 +25,29 @@ def test_contexte_filtre_et_borne():
     assert len(texte) <= 3000
 
 
+def test_definitions_utiles_aux_demandes_reelles():
+    with sqlite3.connect((ROOT / "DWH_fictive_10000_lignes.sqlite").resolve().as_uri() + "?mode=ro", uri=True) as c:
+        schema = {r[0].lower(): {col[1].lower() for col in c.execute(f'PRAGMA table_info("{r[0]}")')}
+                  for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    for question in ("Donne moi la liste des clients moraux", "Donne moi les occupants morale",
+                     "Occupants pour lesquels Type_personne = 'Morale'"):
+        texte = contexte_dictionnaire(DICO, schema, question)
+        assert "Occupant.Type_personne (TEXT)" in texte
+        assert "Type_personne = 'Morale'" in texte
+        assert len(texte) <= 18000
+    texte = contexte_dictionnaire(DICO, schema, "Les patrimoines avec un DPE F ou G")
+    assert "Patrimoine.ID_patrimoine (TEXT)" in texte
+    assert "Diagnostic_valeur.Type_valeur (TEXT)" in texte
+    assert "Diagnostic_valeur.Valeur (" in texte
+
+
+def test_definition_categorielle_sans_valeurs_personnelles():
+    texte = contexte_dictionnaire(DICO, {"occupant": {"type_personne"}}, "occupants moraux")
+    assert "Type_personne = 'Morale'" in texte
+    assert "Valeurs observées" not in texte
+    assert "Raison_sociale_occupant" not in texte
+
+
 def test_ancien_format_tableau(tmp_path):
     p = tmp_path / "d.md"
     p.write_text("### Exemple\n| Colonne | Type | Clés | Description |\n|---|---|---|---|\n| `nom` | TEXT | RGPD | Nom |", encoding="utf-8")

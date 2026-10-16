@@ -124,6 +124,7 @@ function assistant(m){
   if(m.reponse)h+=`<div class="bub">${esc(m.reponse)}</div>`;
   else if(m.attente)h+='<div class="bub txt"><i>Rédaction de la réponse…</i></div>';
   const r=m.resultats;
+  if(r?.recherche_metier){h+='<div class="exp">Recherche métier calculée localement.</div>';if(!m.reponse&&r.note_metier)h+=`<div class="bub">${esc(r.note_metier)}</div>`}
   const nonTechniques=r?.columns.filter(c=>!/^ID_/i.test(c));
   const visibles=nonTechniques?.length?nonTechniques:r?.columns;
   if(r&&r.rows.length){if(!r.masque)h+='<div class="tw"><table><thead><tr>'+visibles.map(c=>`<th>${esc(libelleColonne(c))}</th>`).join('')+'</tr></thead><tbody>'+

@@ -11,6 +11,7 @@ from api import ReponseNaturelle, MessageHistorique, formuler_reponse, generer_s
 from dictionnaire import contexte_dictionnaire
 from boutique.graphiques import choisir_graphique
 from boutique.requetes_rapides import sql_comptage
+from boutique.requetes_metier import reconnaitre
 from boutique import localisation
 from boutique.erreurs import erreur_ia
 
@@ -131,9 +132,15 @@ def ask(p: Question, u=Depends(user_dep)):
 
     # 2. Construction de l'historique récent pour le contexte IA
     hist = []
+    contexte_recherche = None
     for m in S.q("SELECT question, reponse, sql, resultats, access_scope FROM messages WHERE conv_id=? ORDER BY id DESC LIMIT 3", (conv["id"],))[::-1]:
         if not S.message_accessible(m, u):
             continue
+        if m["resultats"]:
+            try:
+                contexte_recherche = S.lire_resultats(m["resultats"]).get("recherche_metier")
+            except ValueError:
+                contexte_recherche = None
         hist += [MessageHistorique(role="user", content=m["question"] or ""),
                  MessageHistorique(role="assistant", content=(m["reponse"] or "(Tableau généré)")
                                   + ("\nRequête précédente : " + m["sql"] if m["sql"] else ""))]
@@ -154,8 +161,23 @@ def ask(p: Question, u=Depends(user_dep)):
     schema_autorise = {t.lower(): {c.lower() for c in colonnes
                          if allowed is None or allowed[t.lower()] is None or c.lower() in allowed[t.lower()]}
                       for t, colonnes in infos.items() if allowed is None or t.lower() in allowed}
-    rapide = sql_comptage(question, schema_autorise) if not hist else None
-    dictionnaire = "" if rapide else contexte_dictionnaire(DICTIONNAIRE_PATH, schema_autorise, question)
+    try:
+        recherche = reconnaitre(question, schema_autorise, contexte_recherche)
+    except PermissionError as exc:
+        S.log_query(u, question, None, "refusé")
+        enregistrer(erreur=str(exc))
+        raise HTTPException(403, str(exc)) from exc
+    if recherche and recherche.reponse:
+        if not S.scope_actuel(u, scope):
+            raise HTTPException(403, "Vos droits ont changé pendant la demande.")
+        mid = enregistrer(reponse=recherche.reponse)
+        return dict(id=mid, reponse=recherche.reponse, sql_genere=None,
+                    resultats=None, texte_en_attente=False)
+    rapide = recherche.sql if recherche else (sql_comptage(question, schema_autorise) if not hist else None)
+    # Une relance (« parmi ces gens ») conserve aussi les définitions des
+    # critères précédents. L'historique a déjà été filtré selon les droits.
+    question_contexte = question + "\n" + "\n".join(m.content for m in hist)
+    dictionnaire = "" if rapide else contexte_dictionnaire(DICTIONNAIRE_PATH, schema_autorise, question_contexte)
     cle = (question, schema, dictionnaire, p.fournisseur)
     en_cache = None if hist else _sql_cache.get(cle)
     journal = lambda **kw: S.log_gemini(u, conv["id"], **kw)
@@ -208,6 +230,9 @@ def ask(p: Question, u=Depends(user_dep)):
     verifier_droits()
     res["fournisseur_sql"] = fournisseur
     res["fournisseur_ia"] = p.fournisseur
+    if recherche:
+        res["recherche_metier"] = recherche.contexte
+        res["note_metier"] = recherche.note
     S.log_query(u, question, sql, "ok", res["row_count"], int((time.time() - t0) * 1000))
     if not hist:
         if len(_sql_cache) >= SQL_CACHE_MAX:
@@ -217,7 +242,15 @@ def ask(p: Question, u=Depends(user_dep)):
     # 5. Préparation de la réponse
     rep, attente = "", False
     if p.veut_reponse:
-        if res["row_count"] == 0:
+        if recherche:
+            rep = ("Aucun résultat." if not res["row_count"] else
+                   f"{res['row_count']} ligne{'s' if res['row_count'] > 1 else ''} "
+                   "correspondant à votre recherche.")
+            if res["truncated"]:
+                rep = f"Résultat limité aux {res['row_count']} premières lignes ; total inconnu."
+            if recherche.note:
+                rep += " " + recherche.note
+        elif res["row_count"] == 0:
             rep = "Aucun résultat."
         else:
             attente = True # Indique au client qu'il doit déclencher la route texte
